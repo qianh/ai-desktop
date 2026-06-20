@@ -5,10 +5,14 @@ export default function TitleBar({
   titleSuffix,
   variant,
   onVariant,
+  inspectorOpen,
+  onToggleInspector,
 }: {
   titleSuffix: string;
   variant: "A" | "B";
   onVariant: (v: "A" | "B") => void;
+  inspectorOpen: boolean;
+  onToggleInspector: () => void;
 }) {
   return (
     <div
@@ -37,6 +41,13 @@ export default function TitleBar({
             B · DevTools
           </button>
         </div>
+        <button
+          onClick={onToggleInspector}
+          title={inspectorOpen ? "收起右侧面板" : "展开右侧面板"}
+          style={{ ...segStyle(inspectorOpen), border: "0.5px solid #c4c4c8", display: "flex", alignItems: "center", gap: 4 }}
+        >
+          {inspectorOpen ? "▶" : "◀"}
+        </button>
       </div>
     </div>
   );

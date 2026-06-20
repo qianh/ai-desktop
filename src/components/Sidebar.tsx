@@ -78,6 +78,31 @@ const deleteBtn: CSSProperties = {
   position: "relative",
   zIndex: 2,
 };
+const collapseToggle: CSSProperties = {
+  appearance: "none",
+  border: "none",
+  background: "none",
+  cursor: "pointer",
+  color: "#9a9aa0",
+  fontSize: 13,
+  lineHeight: 1,
+  padding: "4px 6px",
+  borderRadius: 5,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+function collapsedIconBtn(sel: boolean): CSSProperties {
+  return {
+    ...collapseToggle,
+    background: sel ? ACCENT + "22" : "none",
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    fontSize: 12,
+    fontWeight: 600,
+  };
+}
 
 type Props = {
   pages: Page[];
@@ -86,6 +111,8 @@ type Props = {
   activeId: string;
   totalCount: string;
   query: string;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   onQuery: (v: string) => void;
   onSelectAll: () => void;
   onSelect: (id: string) => void;
@@ -102,11 +129,72 @@ export default function Sidebar(p: Props) {
   const navSel = (on: boolean): CSSProperties => (on ? { ...navBase, background: ACCENT + "1f" } : navBase);
   const rowSel = (on: boolean): CSSProperties => (on ? { ...rowBase, background: ACCENT + "22" } : rowBase);
 
+  if (p.collapsed) {
+    return (
+      <div
+        style={{
+          width: 40,
+          flex: "none",
+          background: "#f3f3f5",
+          borderRight: "1px solid #e0e0e4",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          minHeight: 0,
+          paddingTop: 8,
+          gap: 6,
+        }}
+      >
+        <button
+          onClick={p.onToggleCollapse}
+          title="展开侧边栏"
+          style={{ ...collapseToggle, marginBottom: 4 }}
+        >
+          ▶
+        </button>
+        <button
+          onClick={p.onSelectAll}
+          title="All Sessions"
+          style={{ ...collapseToggle, background: sessionsMode ? ACCENT + "1f" : "none" }}
+        >
+          ≣
+        </button>
+        {p.pages.map((pg) => (
+          <button
+            key={pg.id}
+            onClick={() => p.onSelect(pg.id)}
+            title={pg.name}
+            style={{ ...collapsedIconBtn(sessionsMode && p.activeId === pg.id), color: pg.color || "#5a5a5e" }}
+          >
+            {pg.letter}
+          </button>
+        ))}
+        {p.apps.map((a) => (
+          <button
+            key={a.id}
+            onClick={() => p.onSelect(a.id)}
+            title={a.name}
+            style={{ ...collapsedIconBtn(sessionsMode && p.activeId === a.id), color: a.color || "#5a5a5e" }}
+          >
+            {a.letter}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        <button onClick={p.onCerts} title="Certificates" style={{ ...collapseToggle, marginBottom: 2 }}>
+          🛡
+        </button>
+        <button onClick={p.onSettings} title="Settings" style={{ ...collapseToggle, marginBottom: 8 }}>
+          ⚙
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ width: 246, flex: "none", background: "#f3f3f5", borderRight: "1px solid #e0e0e4", display: "flex", flexDirection: "column", minHeight: 0 }}>
-      {/* search */}
-      <div style={{ padding: "10px 11px 6px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#e7e7ea", borderRadius: 7, padding: "5px 9px" }}>
+      {/* search + collapse */}
+      <div style={{ padding: "10px 11px 6px", display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, background: "#e7e7ea", borderRadius: 7, padding: "5px 9px" }}>
           <span style={{ color: "#9a9aa0", fontSize: 12 }}>⌕</span>
           <input
             value={p.query}
@@ -115,6 +203,13 @@ export default function Sidebar(p: Props) {
             style={{ flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", font: "12px -apple-system,system-ui", color: "#1d1d1f" }}
           />
         </div>
+        <button
+          onClick={p.onToggleCollapse}
+          title="收起侧边栏"
+          style={collapseToggle}
+        >
+          ◀
+        </button>
       </div>
 
       {/* scroll list */}

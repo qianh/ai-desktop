@@ -85,6 +85,35 @@ pub fn write_addon_script(path: &Path) -> Result<(), String> {
     std::fs::write(path, ADDON_SCRIPT).map_err(|e| e.to_string())
 }
 
+fn detect_system_http_proxy() -> Option<(String, u16)> {
+    let output = Command::new("scutil")
+        .arg("--proxy")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let enabled = stdout
+        .lines()
+        .any(|l| l.trim().starts_with("HTTPSEnable") && l.contains('1'));
+    if !enabled {
+        return None;
+    }
+    let host = stdout
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("HTTPSProxy : "))
+        .map(str::to_string)?;
+    let port: u16 = stdout
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("HTTPSPort : "))
+        .and_then(|p| p.parse().ok())?;
+    if host.is_empty() || port == 0 {
+        return None;
+    }
+    Some((host, port))
+}
+
 pub fn start_proxy(paths: &AppScopePaths, session_id: &str) -> Result<ProxyRuntime, String> {
     let mitmdump = find_mitmdump()?;
     generate_certificate(paths)?;
@@ -97,10 +126,20 @@ pub fn start_proxy(paths: &AppScopePaths, session_id: &str) -> Result<ProxyRunti
         std::fs::remove_file(&event_file).map_err(|e| e.to_string())?;
     }
 
-    let child = Command::new(mitmdump)
-        .arg("-q")
+    let upstream_proxy = detect_system_http_proxy();
+
+    let mut cmd = Command::new(mitmdump);
+    cmd.arg("-q")
         .arg("-p")
         .arg(port.to_string())
+        .arg("--ssl-insecure");
+
+    if let Some((host, proxy_port)) = &upstream_proxy {
+        cmd.arg("--mode")
+            .arg(format!("upstream:http://{host}:{proxy_port}"));
+    }
+
+    let child = cmd
         .arg("--set")
         .arg(format!("confdir={}", paths.certs_dir().display()))
         .arg("-s")

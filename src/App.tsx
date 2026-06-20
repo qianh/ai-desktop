@@ -76,6 +76,7 @@ export default function App() {
   const autoCaptureAttempted = useRef<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteAppTarget, setDeleteAppTarget] = useState<{ id: string; name: string } | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const refreshPages = useCallback(async () => {
     const apiPages = await listPages();
@@ -444,7 +445,13 @@ export default function App() {
           flexDirection: "column",
         }}
       >
-        <TitleBar titleSuffix={titleSuffix} variant={variant} onVariant={setVariant} />
+        <TitleBar
+          titleSuffix={titleSuffix}
+          variant={variant}
+          onVariant={setVariant}
+          inspectorOpen={inspectorOpen}
+          onToggleInspector={() => setInspectorOpen((v) => !v)}
+        />
 
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
           <Sidebar
@@ -454,6 +461,8 @@ export default function App() {
             activeId={activeId}
             totalCount={totalCount}
             query={query}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
             onQuery={setQuery}
             onSelectAll={() => pages[0] && selectSession(pages[0].id)}
             onSelect={selectSession}
@@ -559,7 +568,7 @@ export default function App() {
                   pageId={activeId}
                   url={activeSessionMeta.pageUrl}
                   proxyPort={activeSessionMeta.proxyPort}
-                  visible={sessionsMode && modal == null && deleteTarget == null}
+                  visible={sessionsMode && modal == null && deleteTarget == null && deleteAppTarget == null}
                   inspectorOpen={inspectorOpen}
                   onToggleInspector={() => setInspectorOpen((v) => !v)}
                   requestCount={flows.length}
