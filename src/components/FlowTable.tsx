@@ -1,6 +1,6 @@
 // Captured-request list. Variant A = table + right inspector; Variant B = DevTools
 // table + bottom inspector with a waterfall column. Ported from the showFlows block.
-import type { CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import type { Flow } from "../types";
 import { ACCENT } from "../lib/ui";
 import { cat as catFn, catColor, methodColor, statusColor } from "../lib/format";
@@ -49,7 +49,41 @@ type Props = {
   onClear: () => void;
 };
 
+function usePanelResize(axis: "x" | "y", initial: number, min: number, max: number) {
+  const [size, setSize] = useState(initial);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const onMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const panel = panelRef.current;
+    if (!panel) return;
+    const pos = axis === "x" ? "clientX" : "clientY" as const;
+    const dim = axis === "x" ? "width" : "height" as const;
+    const start = e[pos];
+    const startSize = panel.getBoundingClientRect()[dim];
+
+    const onMove = (ev: MouseEvent) => {
+      setSize(Math.max(min, Math.min(max, startSize + start - ev[pos])));
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    document.body.style.cursor = axis === "x" ? "col-resize" : "row-resize";
+    document.body.style.userSelect = "none";
+  };
+
+  return { size, panelRef, onMouseDown } as const;
+}
+
 export default function FlowTable(p: Props) {
+  const detailX = usePanelResize("x", 436, 200, 800);
+  const detailY = usePanelResize("y", 304, 100, 700);
+
   const q = p.query.trim().toLowerCase();
   const filtered = p.flows.filter((f) => {
     if (p.filter === "all") {
@@ -229,7 +263,7 @@ export default function FlowTable(p: Props) {
       {/* variant A: table + right inspector */}
       {p.variant === "A" && (
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0, borderRight: "1px solid #ececef" }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
             <div style={{ flex: "none", display: "grid", gridTemplateColumns: GRID_A, padding: "6px 12px", borderBottom: "1px solid #ececef", background: "#fafafb" }}>
               <div style={headCell}>Status</div>
               <div style={headCell}>Method</div>
@@ -241,7 +275,10 @@ export default function FlowTable(p: Props) {
             </div>
             <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>{filtered.map(rowA)}</div>
           </div>
-          <div style={{ width: 436, flex: "none", minHeight: 0 }}>
+          <div onMouseDown={detailX.onMouseDown} style={{ width: 5, flex: "none", cursor: "col-resize", position: "relative", zIndex: 1 }}>
+            <div style={{ position: "absolute", left: 2, top: 0, bottom: 0, width: 1, background: "#ececef" }} />
+          </div>
+          <div ref={detailX.panelRef} style={{ width: detailX.size, flex: "none", minHeight: 0 }}>
             <FlowDetail flow={selectedFlow} />
           </div>
         </div>
@@ -262,7 +299,10 @@ export default function FlowTable(p: Props) {
             </div>
             <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>{filtered.map(rowB)}</div>
           </div>
-          <div style={{ height: 304, flex: "none", borderTop: "1px solid #e0e0e4", minHeight: 0, boxShadow: "0 -1px 4px rgba(0,0,0,.04)" }}>
+          <div onMouseDown={detailY.onMouseDown} style={{ height: 5, flex: "none", cursor: "row-resize", position: "relative", zIndex: 1 }}>
+            <div style={{ position: "absolute", top: 2, left: 0, right: 0, height: 1, background: "#e0e0e4" }} />
+          </div>
+          <div ref={detailY.panelRef} style={{ height: detailY.size, flex: "none", minHeight: 0, boxShadow: "0 -1px 4px rgba(0,0,0,.04)" }}>
             <FlowDetail flow={selectedFlow} />
           </div>
         </div>
