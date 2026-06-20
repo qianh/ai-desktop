@@ -1,0 +1,39 @@
+[package]
+name = "appscope"
+version = "0.1.0"
+description = "AppScope — macOS app/page launcher + per-session HTTP(S) capture client"
+authors = ["Hong Qian"]
+edition = "2021"
+default-run = "appscope"
+
+# The library is the real entry point so the same code can target mobile later.
+[lib]
+name = "appscope_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["macos-proxy", "unstable"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[[bin]]
+name = "verify_mvp_capture"
+path = "src/bin/verify_mvp_capture.rs"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

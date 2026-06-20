@@ -1,0 +1,11 @@
+# Project-local cargo mirror (does NOT modify ~/.cargo).
+# crates.io (static.crates.io) is unreachable in this environment; rsproxy.cn is.
+# Scope: only affects cargo invoked within this repo.
+[source.crates-io]
+replace-with = "rsproxy-sparse"
+
+[source.rsproxy-sparse]
+registry = "sparse+https://rsproxy.cn/index/"
+
+[net]
+git-fetch-with-cli = true

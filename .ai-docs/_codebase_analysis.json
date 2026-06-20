@@ -1,0 +1,1021 @@
+{
+  "scanTime": "2026-06-19T09:28:46.980Z",
+  "rootDir": "/Users/hong/John/ai/ai-desktop",
+  "summary": {
+    "totalFiles": 20,
+    "totalLines": 2176,
+    "byExtension": {
+      ".tsx": 14,
+      ".ts": 5,
+      ".css": 1
+    },
+    "byDirectory": {
+      "src": 19,
+      "vite.config.ts": 1
+    },
+    "importSources": {
+      "../lib/ui": 7,
+      "react": 3,
+      "../lib/format": 3,
+      "../../lib/ui": 3,
+      "react-dom/client": 2,
+      "./App": 2,
+      "./data/mockData": 1,
+      "./lib/format": 1,
+      "./components/TitleBar": 1,
+      "./components/StatusBar": 1,
+      "./components/Sidebar": 1,
+      "./components/FlowTable": 1,
+      "./components/EmptyState": 1,
+      "./components/AppDetail": 1,
+      "./components/CertManager": 1,
+      "./components/modals/AddPageModal": 1,
+      "./components/modals/AddAppModal": 1,
+      "./components/modals/CertGuideModal": 1,
+      "./FlowDetail": 1,
+      "./vendor-2e8d.js": 1,
+      "./index.css": 1,
+      "vite": 1,
+      "@vitejs/plugin-react": 1
+    },
+    "importedItems": {
+      "ACCENT (from ../lib/ui)": 4,
+      "primaryBtn (from ../lib/ui)": 3,
+      "primaryBtn (from ../../lib/ui)": 3,
+      "secondaryBtn (from ../../lib/ui)": 3,
+      "useState (from react)": 2,
+      "MONO (from ../lib/ui)": 2,
+      "methodColor (from ../lib/format)": 2,
+      "statusColor (from ../lib/format)": 2,
+      "MONO (from ../../lib/ui)": 2,
+      "createRoot (from react-dom/client)": 2,
+      "App (from ./App)": 2,
+      "useMemo (from react)": 1,
+      "buildAppData (from ./data/mockData)": 1,
+      "fmtSize (from ./lib/format)": 1,
+      "TitleBar (from ./components/TitleBar)": 1,
+      "StatusBar (from ./components/StatusBar)": 1,
+      "Sidebar (from ./components/Sidebar)": 1,
+      "FlowTable (from ./components/FlowTable)": 1,
+      "EmptyState (from ./components/EmptyState)": 1,
+      "AppDetail (from ./components/AppDetail)": 1,
+      "CertManager (from ./components/CertManager)": 1,
+      "AddPageModal (from ./components/modals/AddPageModal)": 1,
+      "AddAppModal (from ./components/modals/AddAppModal)": 1,
+      "CertGuideModal (from ./components/modals/CertGuideModal)": 1,
+      "dangerBtn (from ../lib/ui)": 1,
+      "secondaryBtn (from ../lib/ui)": 1,
+      "type CSSProperties (from react)": 1,
+      "catFn (from ../lib/format)": 1,
+      "catColor (from ../lib/format)": 1,
+      "FlowDetail (from ./FlowDetail)": 1,
+      "iconStyle (from ../lib/ui)": 1,
+      "segStyle (from ../lib/ui)": 1,
+      "iconStyle (from ../../lib/ui)": 1,
+      "fmtSize (from ../lib/format)": 1,
+      "e (from ./vendor-2e8d.js)": 1,
+      "t (from ./vendor-2e8d.js)": 1,
+      "StrictMode (from react)": 1,
+      "defineConfig (from vite)": 1,
+      "react (from @vitejs/plugin-react)": 1
+    },
+    "jsxComponents": {
+      "Record": 2,
+      "FlowDetail": 2,
+      "App": 2,
+      "NavMode": 1,
+      "ModalKind": 1,
+      "Toggles": 1,
+      "TitleBar": 1,
+      "Sidebar": 1,
+      "CertManager": 1,
+      "Settings": 1,
+      "AppDetail": 1,
+      "EmptyState": 1,
+      "FlowTable": 1,
+      "StatusBar": 1,
+      "AddPageModal": 1,
+      "AddAppModal": 1,
+      "CertGuideModal": 1,
+      "Switch": 1,
+      "StrictMode": 1
+    },
+    "hooks": {
+      "useState": 7,
+      "useMemo": 1
+    },
+    "styleClasses": {},
+    "importUsageMap": {
+      "useMemo (from react)": [
+        "src/App.tsx"
+      ],
+      "useState (from react)": [
+        "src/App.tsx",
+        "src/components/FlowDetail.tsx"
+      ],
+      "buildAppData (from ./data/mockData)": [
+        "src/App.tsx"
+      ],
+      "fmtSize (from ./lib/format)": [
+        "src/App.tsx"
+      ],
+      "TitleBar (from ./components/TitleBar)": [
+        "src/App.tsx"
+      ],
+      "StatusBar (from ./components/StatusBar)": [
+        "src/App.tsx"
+      ],
+      "Sidebar (from ./components/Sidebar)": [
+        "src/App.tsx"
+      ],
+      "FlowTable (from ./components/FlowTable)": [
+        "src/App.tsx"
+      ],
+      "EmptyState (from ./components/EmptyState)": [
+        "src/App.tsx"
+      ],
+      "AppDetail (from ./components/AppDetail)": [
+        "src/App.tsx"
+      ],
+      "CertManager (from ./components/CertManager)": [
+        "src/App.tsx"
+      ],
+      "AddPageModal (from ./components/modals/AddPageModal)": [
+        "src/App.tsx"
+      ],
+      "AddAppModal (from ./components/modals/AddAppModal)": [
+        "src/App.tsx"
+      ],
+      "CertGuideModal (from ./components/modals/CertGuideModal)": [
+        "src/App.tsx"
+      ],
+      "ACCENT (from ../lib/ui)": [
+        "src/components/AppDetail.tsx",
+        "src/components/FlowTable.tsx",
+        "src/components/Settings.tsx",
+        "src/components/Sidebar.tsx"
+      ],
+      "MONO (from ../lib/ui)": [
+        "src/components/AppDetail.tsx",
+        "src/components/CertManager.tsx"
+      ],
+      "primaryBtn (from ../lib/ui)": [
+        "src/components/AppDetail.tsx",
+        "src/components/CertManager.tsx",
+        "src/components/EmptyState.tsx"
+      ],
+      "dangerBtn (from ../lib/ui)": [
+        "src/components/CertManager.tsx"
+      ],
+      "secondaryBtn (from ../lib/ui)": [
+        "src/components/CertManager.tsx"
+      ],
+      "type CSSProperties (from react)": [
+        "src/components/FlowDetail.tsx"
+      ],
+      "methodColor (from ../lib/format)": [
+        "src/components/FlowDetail.tsx",
+        "src/components/FlowTable.tsx"
+      ],
+      "statusColor (from ../lib/format)": [
+        "src/components/FlowDetail.tsx",
+        "src/components/FlowTable.tsx"
+      ],
+      "catFn (from ../lib/format)": [
+        "src/components/FlowTable.tsx"
+      ],
+      "catColor (from ../lib/format)": [
+        "src/components/FlowTable.tsx"
+      ],
+      "FlowDetail (from ./FlowDetail)": [
+        "src/components/FlowTable.tsx"
+      ],
+      "iconStyle (from ../lib/ui)": [
+        "src/components/Sidebar.tsx"
+      ],
+      "segStyle (from ../lib/ui)": [
+        "src/components/TitleBar.tsx"
+      ],
+      "MONO (from ../../lib/ui)": [
+        "src/components/modals/AddAppModal.tsx",
+        "src/components/modals/AddPageModal.tsx"
+      ],
+      "iconStyle (from ../../lib/ui)": [
+        "src/components/modals/AddAppModal.tsx"
+      ],
+      "primaryBtn (from ../../lib/ui)": [
+        "src/components/modals/AddAppModal.tsx",
+        "src/components/modals/AddPageModal.tsx",
+        "src/components/modals/CertGuideModal.tsx"
+      ],
+      "secondaryBtn (from ../../lib/ui)": [
+        "src/components/modals/AddAppModal.tsx",
+        "src/components/modals/AddPageModal.tsx",
+        "src/components/modals/CertGuideModal.tsx"
+      ],
+      "fmtSize (from ../lib/format)": [
+        "src/data/mockData.ts"
+      ],
+      "e (from ./vendor-2e8d.js)": [
+        "src/data/mockData.ts"
+      ],
+      "t (from ./vendor-2e8d.js)": [
+        "src/data/mockData.ts"
+      ],
+      "createRoot (from react-dom/client)": [
+        "src/data/mockData.ts",
+        "src/main.tsx"
+      ],
+      "App (from ./App)": [
+        "src/data/mockData.ts",
+        "src/main.tsx"
+      ],
+      "StrictMode (from react)": [
+        "src/main.tsx"
+      ],
+      "defineConfig (from vite)": [
+        "vite.config.ts"
+      ],
+      "react (from @vitejs/plugin-react)": [
+        "vite.config.ts"
+      ]
+    },
+    "componentUsageMap": {
+      "NavMode": [
+        "src/App.tsx"
+      ],
+      "ModalKind": [
+        "src/App.tsx"
+      ],
+      "Record": [
+        "src/App.tsx",
+        "src/components/FlowDetail.tsx"
+      ],
+      "Toggles": [
+        "src/App.tsx"
+      ],
+      "TitleBar": [
+        "src/App.tsx"
+      ],
+      "Sidebar": [
+        "src/App.tsx"
+      ],
+      "CertManager": [
+        "src/App.tsx"
+      ],
+      "Settings": [
+        "src/App.tsx"
+      ],
+      "AppDetail": [
+        "src/App.tsx"
+      ],
+      "EmptyState": [
+        "src/App.tsx"
+      ],
+      "FlowTable": [
+        "src/App.tsx"
+      ],
+      "StatusBar": [
+        "src/App.tsx"
+      ],
+      "AddPageModal": [
+        "src/App.tsx"
+      ],
+      "AddAppModal": [
+        "src/App.tsx"
+      ],
+      "CertGuideModal": [
+        "src/App.tsx"
+      ],
+      "FlowDetail": [
+        "src/components/FlowTable.tsx"
+      ],
+      "Switch": [
+        "src/components/Settings.tsx"
+      ],
+      "App": [
+        "src/data/mockData.ts",
+        "src/main.tsx"
+      ],
+      "StrictMode": [
+        "src/main.tsx"
+      ]
+    },
+    "hookUsageMap": {
+      "useMemo": [
+        "src/App.tsx"
+      ],
+      "useState": [
+        "src/App.tsx",
+        "src/components/FlowDetail.tsx"
+      ]
+    }
+  },
+  "files": [
+    {
+      "path": "src/App.tsx",
+      "extension": ".tsx",
+      "lines": 184,
+      "imports": [
+        {
+          "source": "react",
+          "imports": [
+            {
+              "original": "useMemo",
+              "alias": "useMemo"
+            },
+            {
+              "original": "useState",
+              "alias": "useState"
+            }
+          ],
+          "type": "named",
+          "raw": "import { useMemo, useState } from \"react\""
+        },
+        {
+          "source": "./data/mockData",
+          "imports": [
+            {
+              "original": "buildAppData",
+              "alias": "buildAppData"
+            }
+          ],
+          "type": "named",
+          "raw": "import { buildAppData } from \"./data/mockData\""
+        },
+        {
+          "source": "./lib/format",
+          "imports": [
+            {
+              "original": "fmtSize",
+              "alias": "fmtSize"
+            }
+          ],
+          "type": "named",
+          "raw": "import { fmtSize } from \"./lib/format\""
+        },
+        {
+          "source": "./components/TitleBar",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "TitleBar"
+            }
+          ],
+          "type": "default",
+          "raw": "import TitleBar from \"./components/TitleBar\""
+        },
+        {
+          "source": "./components/StatusBar",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "StatusBar"
+            }
+          ],
+          "type": "default",
+          "raw": "import StatusBar from \"./components/StatusBar\""
+        },
+        {
+          "source": "./components/Sidebar",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "Sidebar"
+            }
+          ],
+          "type": "default",
+          "raw": "import Sidebar from \"./components/Sidebar\""
+        },
+        {
+          "source": "./components/FlowTable",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "FlowTable"
+            }
+          ],
+          "type": "default",
+          "raw": "import FlowTable from \"./components/FlowTable\""
+        },
+        {
+          "source": "./components/EmptyState",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "EmptyState"
+            }
+          ],
+          "type": "default",
+          "raw": "import EmptyState from \"./components/EmptyState\""
+        },
+        {
+          "source": "./components/AppDetail",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "AppDetail"
+            }
+          ],
+          "type": "default",
+          "raw": "import AppDetail from \"./components/AppDetail\""
+        },
+        {
+          "source": "./components/CertManager",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "CertManager"
+            }
+          ],
+          "type": "default",
+          "raw": "import CertManager from \"./components/CertManager\""
+        },
+        {
+          "source": "./components/modals/AddPageModal",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "AddPageModal"
+            }
+          ],
+          "type": "default",
+          "raw": "import AddPageModal from \"./components/modals/AddPageModal\""
+        },
+        {
+          "source": "./components/modals/AddAppModal",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "AddAppModal"
+            }
+          ],
+          "type": "default",
+          "raw": "import AddAppModal from \"./components/modals/AddAppModal\""
+        },
+        {
+          "source": "./components/modals/CertGuideModal",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "CertGuideModal"
+            }
+          ],
+          "type": "default",
+          "raw": "import CertGuideModal from \"./components/modals/CertGuideModal\""
+        }
+      ],
+      "jsxComponents": {
+        "NavMode": 1,
+        "ModalKind": 1,
+        "Record": 1,
+        "Toggles": 1,
+        "TitleBar": 1,
+        "Sidebar": 1,
+        "CertManager": 1,
+        "Settings": 1,
+        "AppDetail": 1,
+        "EmptyState": 1,
+        "FlowTable": 1,
+        "StatusBar": 1,
+        "AddPageModal": 1,
+        "AddAppModal": 1,
+        "CertGuideModal": 1
+      },
+      "hooks": {
+        "useMemo": 1,
+        "useState": 5
+      },
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/AppDetail.tsx",
+      "extension": ".tsx",
+      "lines": 93,
+      "imports": [
+        {
+          "source": "../lib/ui",
+          "imports": [
+            {
+              "original": "ACCENT",
+              "alias": "ACCENT"
+            },
+            {
+              "original": "MONO",
+              "alias": "MONO"
+            },
+            {
+              "original": "primaryBtn",
+              "alias": "primaryBtn"
+            }
+          ],
+          "type": "named",
+          "raw": "import { ACCENT, MONO, primaryBtn } from \"../lib/ui\""
+        }
+      ],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/CertManager.tsx",
+      "extension": ".tsx",
+      "lines": 86,
+      "imports": [
+        {
+          "source": "../lib/ui",
+          "imports": [
+            {
+              "original": "MONO",
+              "alias": "MONO"
+            },
+            {
+              "original": "dangerBtn",
+              "alias": "dangerBtn"
+            },
+            {
+              "original": "primaryBtn",
+              "alias": "primaryBtn"
+            },
+            {
+              "original": "secondaryBtn",
+              "alias": "secondaryBtn"
+            }
+          ],
+          "type": "named",
+          "raw": "import { MONO, dangerBtn, primaryBtn, secondaryBtn } from \"../lib/ui\""
+        }
+      ],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/EmptyState.tsx",
+      "extension": ".tsx",
+      "lines": 41,
+      "imports": [
+        {
+          "source": "../lib/ui",
+          "imports": [
+            {
+              "original": "primaryBtn",
+              "alias": "primaryBtn"
+            }
+          ],
+          "type": "named",
+          "raw": "import { primaryBtn } from \"../lib/ui\""
+        }
+      ],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/FlowDetail.tsx",
+      "extension": ".tsx",
+      "lines": 440,
+      "imports": [
+        {
+          "source": "react",
+          "imports": [
+            {
+              "original": "useState",
+              "alias": "useState"
+            },
+            {
+              "original": "type CSSProperties",
+              "alias": "type CSSProperties"
+            }
+          ],
+          "type": "named",
+          "raw": "import { useState, type CSSProperties } from \"react\""
+        },
+        {
+          "source": "../lib/format",
+          "imports": [
+            {
+              "original": "methodColor",
+              "alias": "methodColor"
+            },
+            {
+              "original": "statusColor",
+              "alias": "statusColor"
+            }
+          ],
+          "type": "named",
+          "raw": "import { methodColor, statusColor } from \"../lib/format\""
+        }
+      ],
+      "jsxComponents": {
+        "Record": 1
+      },
+      "hooks": {
+        "useState": 2
+      },
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/FlowTable.tsx",
+      "extension": ".tsx",
+      "lines": 273,
+      "imports": [
+        {
+          "source": "../lib/ui",
+          "imports": [
+            {
+              "original": "ACCENT",
+              "alias": "ACCENT"
+            }
+          ],
+          "type": "named",
+          "raw": "import { ACCENT } from \"../lib/ui\""
+        },
+        {
+          "source": "../lib/format",
+          "imports": [
+            {
+              "original": "cat",
+              "alias": "catFn"
+            },
+            {
+              "original": "catColor",
+              "alias": "catColor"
+            },
+            {
+              "original": "methodColor",
+              "alias": "methodColor"
+            },
+            {
+              "original": "statusColor",
+              "alias": "statusColor"
+            }
+          ],
+          "type": "named",
+          "raw": "import { cat as catFn, catColor, methodColor, statusColor } from \"../lib/format\""
+        },
+        {
+          "source": "./FlowDetail",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "FlowDetail"
+            }
+          ],
+          "type": "default",
+          "raw": "import FlowDetail from \"./FlowDetail\""
+        }
+      ],
+      "jsxComponents": {
+        "FlowDetail": 2
+      },
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/Settings.tsx",
+      "extension": ".tsx",
+      "lines": 105,
+      "imports": [
+        {
+          "source": "../lib/ui",
+          "imports": [
+            {
+              "original": "ACCENT",
+              "alias": "ACCENT"
+            }
+          ],
+          "type": "named",
+          "raw": "import { ACCENT } from \"../lib/ui\""
+        }
+      ],
+      "jsxComponents": {
+        "Switch": 1
+      },
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/Sidebar.tsx",
+      "extension": ".tsx",
+      "lines": 170,
+      "imports": [
+        {
+          "source": "../lib/ui",
+          "imports": [
+            {
+              "original": "ACCENT",
+              "alias": "ACCENT"
+            },
+            {
+              "original": "iconStyle",
+              "alias": "iconStyle"
+            }
+          ],
+          "type": "named",
+          "raw": "import { ACCENT, iconStyle } from \"../lib/ui\""
+        }
+      ],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/StatusBar.tsx",
+      "extension": ".tsx",
+      "lines": 39,
+      "imports": [],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/TitleBar.tsx",
+      "extension": ".tsx",
+      "lines": 57,
+      "imports": [
+        {
+          "source": "../lib/ui",
+          "imports": [
+            {
+              "original": "segStyle",
+              "alias": "segStyle"
+            }
+          ],
+          "type": "named",
+          "raw": "import { segStyle } from \"../lib/ui\""
+        }
+      ],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/modals/AddAppModal.tsx",
+      "extension": ".tsx",
+      "lines": 44,
+      "imports": [
+        {
+          "source": "../../lib/ui",
+          "imports": [
+            {
+              "original": "MONO",
+              "alias": "MONO"
+            },
+            {
+              "original": "iconStyle",
+              "alias": "iconStyle"
+            },
+            {
+              "original": "primaryBtn",
+              "alias": "primaryBtn"
+            },
+            {
+              "original": "secondaryBtn",
+              "alias": "secondaryBtn"
+            }
+          ],
+          "type": "named",
+          "raw": "import { MONO, iconStyle, primaryBtn, secondaryBtn } from \"../../lib/ui\""
+        }
+      ],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/modals/AddPageModal.tsx",
+      "extension": ".tsx",
+      "lines": 67,
+      "imports": [
+        {
+          "source": "../../lib/ui",
+          "imports": [
+            {
+              "original": "MONO",
+              "alias": "MONO"
+            },
+            {
+              "original": "primaryBtn",
+              "alias": "primaryBtn"
+            },
+            {
+              "original": "secondaryBtn",
+              "alias": "secondaryBtn"
+            }
+          ],
+          "type": "named",
+          "raw": "import { MONO, primaryBtn, secondaryBtn } from \"../../lib/ui\""
+        }
+      ],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/components/modals/CertGuideModal.tsx",
+      "extension": ".tsx",
+      "lines": 42,
+      "imports": [
+        {
+          "source": "../../lib/ui",
+          "imports": [
+            {
+              "original": "primaryBtn",
+              "alias": "primaryBtn"
+            },
+            {
+              "original": "secondaryBtn",
+              "alias": "secondaryBtn"
+            }
+          ],
+          "type": "named",
+          "raw": "import { primaryBtn, secondaryBtn } from \"../../lib/ui\""
+        }
+      ],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/data/mockData.ts",
+      "extension": ".ts",
+      "lines": 219,
+      "imports": [
+        {
+          "source": "../lib/format",
+          "imports": [
+            {
+              "original": "fmtSize",
+              "alias": "fmtSize"
+            }
+          ],
+          "type": "named",
+          "raw": "import { fmtSize } from \"../lib/format\""
+        },
+        {
+          "source": "./vendor-2e8d.js",
+          "imports": [
+            {
+              "original": "r",
+              "alias": "e"
+            },
+            {
+              "original": "j",
+              "alias": "t"
+            }
+          ],
+          "type": "named",
+          "raw": "import{r as e,j as t}from\"./vendor-2e8d.js\""
+        },
+        {
+          "source": "react-dom/client",
+          "imports": [
+            {
+              "original": "createRoot",
+              "alias": "createRoot"
+            }
+          ],
+          "type": "named",
+          "raw": "import { createRoot } from \"react-dom/client\""
+        },
+        {
+          "source": "./App",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "App"
+            }
+          ],
+          "type": "default",
+          "raw": "import App from \"./App\""
+        }
+      ],
+      "jsxComponents": {
+        "App": 1
+      },
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/index.css",
+      "extension": ".css",
+      "lines": 29,
+      "imports": [],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/lib/format.ts",
+      "extension": ".ts",
+      "lines": 61,
+      "imports": [],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/lib/ui.ts",
+      "extension": ".ts",
+      "lines": 77,
+      "imports": [],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/main.tsx",
+      "extension": ".tsx",
+      "lines": 11,
+      "imports": [
+        {
+          "source": "react",
+          "imports": [
+            {
+              "original": "StrictMode",
+              "alias": "StrictMode"
+            }
+          ],
+          "type": "named",
+          "raw": "import { StrictMode } from \"react\""
+        },
+        {
+          "source": "react-dom/client",
+          "imports": [
+            {
+              "original": "createRoot",
+              "alias": "createRoot"
+            }
+          ],
+          "type": "named",
+          "raw": "import { createRoot } from \"react-dom/client\""
+        },
+        {
+          "source": "./App",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "App"
+            }
+          ],
+          "type": "default",
+          "raw": "import App from \"./App\""
+        },
+        {
+          "source": "./index.css",
+          "imports": [],
+          "type": "side-effect",
+          "raw": "import \"./index.css\";"
+        }
+      ],
+      "jsxComponents": {
+        "StrictMode": 1,
+        "App": 1
+      },
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "src/types.ts",
+      "extension": ".ts",
+      "lines": 118,
+      "imports": [],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    },
+    {
+      "path": "vite.config.ts",
+      "extension": ".ts",
+      "lines": 20,
+      "imports": [
+        {
+          "source": "vite",
+          "imports": [
+            {
+              "original": "defineConfig",
+              "alias": "defineConfig"
+            }
+          ],
+          "type": "named",
+          "raw": "import { defineConfig } from \"vite\""
+        },
+        {
+          "source": "@vitejs/plugin-react",
+          "imports": [
+            {
+              "original": "default",
+              "alias": "react"
+            }
+          ],
+          "type": "default",
+          "raw": "import react from \"@vitejs/plugin-react\""
+        }
+      ],
+      "jsxComponents": {},
+      "hooks": {},
+      "styleClasses": {}
+    }
+  ]
+}

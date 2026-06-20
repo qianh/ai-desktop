@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @keyframes ascPulse { 0%,100%{ opacity:1 } 50%{ opacity:.35 } }
+    *::-webkit-scrollbar { width:11px; height:11px }
+    *::-webkit-scrollbar-thumb { background:#c4c4ca; border-radius:6px; border:3px solid transparent; background-clip:content-box }
+    body { margin:0 }
+  </style>
+</helmet>
+
+<div style="min-height:100vh;width:100%;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:32px;background:linear-gradient(160deg,#dcdde1,#cbccd2);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif;">
+  <div style="width:1280px;height:808px;background:#ffffff;border-radius:11px;box-shadow:0 28px 70px rgba(0,0,0,.32),0 2px 8px rgba(0,0,0,.18);overflow:hidden;display:flex;flex-direction:column;border:0.5px solid rgba(0,0,0,.18);">
+
+    <!-- Title bar -->
+    <div style="height:39px;flex:none;display:flex;align-items:center;gap:14px;padding:0 14px;background:linear-gradient(180deg,#ededef,#e3e3e7);border-bottom:1px solid #cccdd2;">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <span style="width:12px;height:12px;border-radius:50%;background:#ff5f57;border:0.5px solid rgba(0,0,0,.12);"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#febc2e;border:0.5px solid rgba(0,0,0,.12);"></span>
+        <span style="width:12px;height:12px;border-radius:50%;background:#28c840;border:0.5px solid rgba(0,0,0,.12);"></span>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:7px;">
+        <span style="font-size:13px;font-weight:600;color:#3a3a3e;">AppScope</span>
+        <span style="font-size:12.5px;color:#9a9aa0;">— {{ titleSuffix }}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:11px;color:#9a9aa0;">布局</span>
+        <div style="display:flex;background:#d9d9de;border-radius:7px;padding:2px;gap:2px;">
+          <button onClick="{{ setVarA }}" style="{{ varAStyle }}">A · 检查器</button>
+          <button onClick="{{ setVarB }}" style="{{ varBStyle }}">B · DevTools</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div style="flex:1;display:flex;min-height:0;">
+
+      <!-- Sidebar -->
+      <div style="width:246px;flex:none;background:#f3f3f5;border-right:1px solid #e0e0e4;display:flex;flex-direction:column;min-height:0;">
+        <div style="padding:10px 11px 6px;">
+          <div style="display:flex;align-items:center;gap:6px;background:#e7e7ea;border-radius:7px;padding:5px 9px;">
+            <span style="color:#9a9aa0;font-size:12px;">⌕</span>
+            <input value="{{ query }}" onChange="{{ setQuery }}" placeholder="搜索请求 / Host / Path" style="flex:1;min-width:0;border:none;background:none;outline:none;font:12px -apple-system,system-ui;color:#1d1d1f;" />
+          </div>
+        </div>
+        <div style="flex:1;overflow:auto;min-height:0;padding:2px 8px 8px;">
+          <button onClick="{{ selectAll }}" style="{{ allRowStyle }}">
+            <span style="width:18px;text-align:center;font-size:13px;">≣</span><span style="flex:1;text-align:left;">All Sessions</span><span style="font:11px ui-monospace,Menlo,monospace;color:#a0a0a6;">{{ totalCount }}</span>
+          </button>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 8px 4px;">
+            <span style="font-size:10.5px;font-weight:700;color:#9a9aa0;letter-spacing:.06em;text-transform:uppercase;">Pages</span>
+            <button onClick="{{ openAddPage }}" title="Add Page" style="appearance:none;border:none;background:none;cursor:pointer;color:#8a8a8e;font-size:15px;line-height:1;padding:0 2px;">+</button>
+          </div>
+          <sc-for list="{{ pageRows }}" as="p" hint-placeholder-count="3">
+            <button onClick="{{ p.onClick }}" style="{{ p.rowStyle }}">
+              <span style="{{ p.iconStyle }}">{{ p.letter }}</span>
+              <span style="flex:1;text-align:left;min-width:0;overflow:hidden;">
+                <span style="display:block;font-size:12.5px;font-weight:500;color:{{ p.fg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.name }}</span>
+                <span style="display:block;font-size:11px;color:{{ p.sub }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.host }}</span>
+              </span>
+              <span style="{{ p.dotStyle }}"></span>
+            </button>
+          </sc-for>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 8px 4px;">
+            <span style="font-size:10.5px;font-weight:700;color:#9a9aa0;letter-spacing:.06em;text-transform:uppercase;">Apps</span>
+            <button onClick="{{ openAddApp }}" title="Add App" style="appearance:none;border:none;background:none;cursor:pointer;color:#8a8a8e;font-size:15px;line-height:1;padding:0 2px;">+</button>
+          </div>
+          <sc-for list="{{ appRows }}" as="a" hint-placeholder-count="3">
+            <button onClick="{{ a.onClick }}" style="{{ a.rowStyle }}">
+              <span style="{{ a.iconStyle }}">{{ a.letter }}</span>
+              <span style="flex:1;text-align:left;min-width:0;overflow:hidden;">
+                <span style="display:block;font-size:12.5px;font-weight:500;color:{{ a.fg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.name }}</span>
+                <span style="display:block;font-size:11px;color:{{ a.sub }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.mode }}</span>
+              </span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="border-top:1px solid #e0e0e4;padding:8px;display:flex;flex-direction:column;gap:2px;">
+          <button onClick="{{ goCerts }}" style="{{ certNavStyle }}">
+            <span style="width:18px;text-align:center;font-size:13px;">🛡</span><span style="flex:1;text-align:left;">Certificates</span>
+            <span style="font-size:10px;font-weight:600;color:#30a14e;background:#e7f6ec;border-radius:5px;padding:2px 6px;">Trusted</span>
+          </button>
+          <button onClick="{{ goSettings }}" style="{{ settingsNavStyle }}">
+            <span style="width:18px;text-align:center;font-size:13px;">⚙</span><span style="flex:1;text-align:left;">Settings</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Main content -->
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;background:#ffffff;">
+
+        <sc-if value="{{ showCerts }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;overflow:auto;min-height:0;padding:28px 36px;">
+            <div style="max-width:640px;margin:0 auto;">
+              <h1 style="font-size:21px;font-weight:600;margin:0 0 4px;color:#1d1d1f;">Certificate Manager</h1>
+              <p style="font-size:13px;color:#8a8a8e;margin:0 0 22px;line-height:1.5;">AppScope 使用本机生成的 Root CA 解密经其代理的 HTTPS 流量。私钥仅保存在本机，永不上传。</p>
+              <div style="border:1px solid #e6e6ea;border-radius:12px;padding:20px 22px;display:flex;gap:18px;align-items:center;margin-bottom:18px;background:#fbfbfc;">
+                <div style="width:54px;height:54px;border-radius:13px;background:#e7f6ec;display:flex;align-items:center;justify-content:center;font-size:26px;flex:none;">🛡</div>
+                <div style="flex:1;">
+                  <div style="font-size:16px;font-weight:600;color:#1d1d1f;">AppScope Local CA</div>
+                  <div style="font-size:12.5px;color:#8a8a8e;margin-top:2px;">已安装并被系统信任 · 可解密 HTTPS</div>
+                </div>
+                <span style="font-size:12px;font-weight:600;color:#30a14e;background:#e7f6ec;border-radius:7px;padding:6px 12px;">Trusted</span>
+              </div>
+              <div style="display:flex;gap:0;margin-bottom:24px;align-items:center;">
+                <sc-for list="{{ certSteps }}" as="s" hint-placeholder-count="3">
+                  <div style="display:flex;align-items:center;">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:5px;width:78px;">
+                      <span style="{{ s.dotStyle }}">{{ s.mark }}</span>
+                      <span style="font-size:10.5px;color:{{ s.labelColor }};text-align:center;">{{ s.label }}</span>
+                    </div>
+                    <sc-if value="{{ s.connector }}" hint-placeholder-val="{{ false }}"><span style="width:26px;height:2px;background:#30a14e;margin-bottom:16px;"></span></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:grid;grid-template-columns:118px 1fr;row-gap:9px;column-gap:14px;font-size:12.5px;margin-bottom:24px;">
+                <div style="color:#8a8a8e;">Common Name</div><div style="font-family:ui-monospace,Menlo,monospace;color:#1d1d1f;">AppScope Proxy CA</div>
+                <div style="color:#8a8a8e;">SHA-256</div><div style="font-family:ui-monospace,Menlo,monospace;color:#1d1d1f;word-break:break-all;">A1:9F:3C:7E:42:0B:…:D8:11</div>
+                <div style="color:#8a8a8e;">Valid until</div><div style="font-family:ui-monospace,Menlo,monospace;color:#1d1d1f;">2036-06-18</div>
+                <div style="color:#8a8a8e;">Cert path</div><div style="font-family:ui-monospace,Menlo,monospace;color:#1d1d1f;word-break:break-all;">~/Library/Application Support/AppScope/certs/rootCA.pem</div>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:9px;margin-bottom:22px;">
+                <button onClick="{{ openCertGuide }}" style="{{ primaryBtn }}">安装引导</button>
+                <button style="{{ secondaryBtn }}">在钥匙串中打开</button>
+                <button style="{{ secondaryBtn }}">检查信任状态</button>
+                <button style="{{ dangerBtn }}">删除 CA</button>
+              </div>
+              <div style="border:1px solid #f0e0c8;background:#fdf7ec;border-radius:10px;padding:13px 15px;display:flex;gap:11px;">
+                <span style="font-size:15px;">⚠️</span>
+                <p style="margin:0;font-size:12px;line-height:1.55;color:#8a6d3b;">信任 AppScope CA 后，AppScope 可以解密通过它代理的 HTTPS 流量。请只在你信任的设备和会话中开启抓包。不要抓取银行、支付、密码管理器等敏感应用。</p>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showSettings }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;overflow:auto;min-height:0;padding:28px 36px;">
+            <div style="max-width:620px;margin:0 auto;">
+              <h1 style="font-size:21px;font-weight:600;margin:0 0 22px;color:#1d1d1f;">Settings</h1>
+              <sc-for list="{{ settingSections }}" as="sec" hint-placeholder-count="4">
+                <div style="margin-bottom:26px;">
+                  <div style="font-size:11px;font-weight:700;color:#9a9aa0;letter-spacing:.05em;text-transform:uppercase;margin-bottom:8px;">{{ sec.title }}</div>
+                  <div style="border:1px solid #e6e6ea;border-radius:11px;overflow:hidden;">
+                    <sc-for list="{{ sec.rows }}" as="r" hint-placeholder-count="2">
+                      <div style="display:flex;align-items:center;gap:12px;padding:12px 15px;border-bottom:1px solid #f1f1f3;">
+                        <div style="flex:1;min-width:0;">
+                          <div style="font-size:13px;color:#1d1d1f;">{{ r.label }}</div>
+                          <sc-if value="{{ r.hasDesc }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:#9a9aa0;margin-top:1px;">{{ r.desc }}</div></sc-if>
+                        </div>
+                        <sc-if value="{{ r.isToggle }}" hint-placeholder-val="{{ false }}"><button onClick="{{ r.onToggle }}" style="{{ r.toggleStyle }}"><span style="{{ r.knobStyle }}"></span></button></sc-if>
+                        <sc-if value="{{ r.isValue }}" hint-placeholder-val="{{ false }}"><span style="font:12px ui-monospace,Menlo,monospace;color:#6e6e73;background:#f3f3f5;border-radius:6px;padding:4px 9px;">{{ r.value }}</span></sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showApp }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;overflow:auto;min-height:0;display:flex;align-items:center;justify-content:center;padding:36px;">
+            <div style="max-width:440px;width:100%;text-align:center;">
+              <div style="{{ appBigIcon }}">{{ appLetter }}</div>
+              <div style="font-size:19px;font-weight:600;color:#1d1d1f;margin-top:16px;">{{ appName }}</div>
+              <div style="font-size:12.5px;color:#9a9aa0;margin-top:3px;font-family:ui-monospace,Menlo,monospace;">{{ appBundle }}</div>
+              <div style="font-size:11px;color:#a0a0a6;margin-top:2px;">{{ appPath }}</div>
+              <div style="margin:26px 0 8px;font-size:11px;font-weight:700;color:#9a9aa0;letter-spacing:.05em;text-transform:uppercase;">启动模式</div>
+              <div style="display:flex;flex-direction:column;gap:8px;text-align:left;">
+                <sc-for list="{{ launchModes }}" as="m" hint-placeholder-count="3">
+                  <button onClick="{{ m.onClick }}" style="{{ m.rowStyle }}">
+                    <span style="{{ m.radioStyle }}"></span>
+                    <span style="flex:1;">
+                      <span style="display:block;font-size:13px;font-weight:500;color:#1d1d1f;">{{ m.label }}</span>
+                      <span style="display:block;font-size:11.5px;color:#9a9aa0;margin-top:1px;">{{ m.desc }}</span>
+                    </span>
+                    <sc-if value="{{ m.soon }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;font-weight:600;color:#8a8a8e;background:#eee;border-radius:5px;padding:2px 7px;">Coming Soon</span></sc-if>
+                  </button>
+                </sc-for>
+              </div>
+              <button style="{{ primaryBtnWide }}">打开 {{ appName }}</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:36px;text-align:center;">
+            <div style="width:60px;height:60px;border-radius:15px;border:2px dashed #d4d4d8;display:flex;align-items:center;justify-content:center;font-size:26px;color:#c4c4ca;">↯</div>
+            <div style="font-size:15px;font-weight:600;color:#1d1d1f;">还没有捕获到请求</div>
+            <div style="font-size:12.5px;color:#9a9aa0;max-width:320px;line-height:1.5;">点击下方按钮，AppScope 将启动本地代理与独立 Chrome Profile，打开页面并开始抓包。</div>
+            <button style="{{ primaryBtn }}">⏵ Open &amp; Capture</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showFlows }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+            <div style="flex:none;border-bottom:1px solid #ececef;padding:8px 12px;display:flex;align-items:center;gap:10px;background:#fbfbfc;">
+              <button onClick="{{ toggleRecord }}" style="{{ recordBtnStyle }}"><span style="{{ recordDotStyle }}"></span>{{ recordLabel }}</button>
+              <button onClick="{{ clearFlows }}" title="清空" style="appearance:none;border:none;background:none;cursor:pointer;color:#8a8a8e;font-size:14px;padding:4px 6px;">⌫</button>
+              <div style="width:1px;height:18px;background:#e2e2e6;"></div>
+              <div style="display:flex;align-items:center;gap:5px;background:#f1f1f3;border-radius:7px;padding:4px 9px;flex:1;max-width:260px;">
+                <span style="color:#9a9aa0;font-size:11px;">⌕</span>
+                <input value="{{ query }}" onChange="{{ setQuery }}" placeholder="Filter URL / path" style="flex:1;min-width:0;border:none;background:none;outline:none;font:11.5px ui-monospace,Menlo,monospace;color:#1d1d1f;" />
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;gap:3px;">
+                <sc-for list="{{ filterChips }}" as="c" hint-placeholder-count="9">
+                  <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+
+            <sc-if value="{{ isVarA }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:1;display:flex;min-height:0;">
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;border-right:1px solid #ececef;">
+                  <div style="flex:none;display:grid;grid-template-columns:54px 64px 1fr 150px 78px 74px 70px;font-size:10.5px;font-weight:600;color:#9a9aa0;text-transform:uppercase;letter-spacing:.03em;padding:6px 12px;border-bottom:1px solid #ececef;background:#fafafb;">
+                    <div>Status</div><div>Method</div><div>Path</div><div>Host</div><div>Type</div><div style="text-align:right;">Size</div><div style="text-align:right;">Time</div>
+                  </div>
+                  <div style="flex:1;overflow:auto;min-height:0;">
+                    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="12">
+                      <button onClick="{{ r.onClick }}" style="{{ r.rowStyleA }}">
+                        <span style="display:flex;align-items:center;gap:6px;"><span style="{{ r.dotStyle }}"></span><span style="{{ r.statusStyle }}">{{ r.statusText }}</span></span>
+                        <span style="{{ r.methodStyle }}">{{ r.method }}</span>
+                        <span style="font:12px ui-monospace,Menlo,monospace;color:{{ r.fg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.name }}</span>
+                        <span style="font-size:11.5px;color:{{ r.sub }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.host }}</span>
+                        <span style="font-size:11px;color:{{ r.sub }};">{{ r.typeLabel }}</span>
+                        <span style="font:11px ui-monospace,Menlo,monospace;color:{{ r.sub }};text-align:right;">{{ r.sizeLabel }}</span>
+                        <span style="font:11px ui-monospace,Menlo,monospace;color:{{ r.sub }};text-align:right;">{{ r.timeLabel }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="width:436px;flex:none;min-height:0;">
+                  <dc-import name="FlowDetail" flow="{{ selectedFlow }}" hint-size="436px,100%" style="display:block;height:100%;"></dc-import>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isVarB }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+                <div style="flex:1;min-height:0;display:flex;flex-direction:column;">
+                  <div style="flex:none;display:grid;grid-template-columns:1fr 60px 60px 80px 130px 70px 200px;font-size:10.5px;font-weight:600;color:#9a9aa0;text-transform:uppercase;letter-spacing:.03em;padding:6px 12px;border-bottom:1px solid #ececef;background:#fafafb;">
+                    <div>Name</div><div>Status</div><div>Method</div><div>Type</div><div>Initiator</div><div style="text-align:right;">Size</div><div>Waterfall</div>
+                  </div>
+                  <div style="flex:1;overflow:auto;min-height:0;">
+                    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="12">
+                      <button onClick="{{ r.onClick }}" style="{{ r.rowStyleB }}">
+                        <span style="display:flex;align-items:center;gap:7px;min-width:0;"><span style="{{ r.dotStyle }}"></span><span style="font:12px ui-monospace,Menlo,monospace;color:{{ r.fg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.name }}</span></span>
+                        <span style="{{ r.statusStyle }}">{{ r.statusText }}</span>
+                        <span style="font:11px ui-monospace,Menlo,monospace;color:{{ r.sub }};">{{ r.method }}</span>
+                        <span style="font-size:11px;color:{{ r.sub }};">{{ r.typeLabel }}</span>
+                        <span style="font-size:11px;color:{{ r.sub }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.initiator }}</span>
+                        <span style="font:11px ui-monospace,Menlo,monospace;color:{{ r.sub }};text-align:right;">{{ r.sizeLabel }}</span>
+                        <sc-if value="{{ showWaterfall }}" hint-placeholder-val="{{ true }}"><span style="position:relative;height:13px;"><span style="{{ r.wfStyle }}"></span></span></sc-if>
+                      </button>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="height:304px;flex:none;border-top:1px solid #e0e0e4;min-height:0;box-shadow:0 -1px 4px rgba(0,0,0,.04);">
+                  <dc-import name="FlowDetail" flow="{{ selectedFlow }}" hint-size="100%,304px" style="display:block;height:100%;"></dc-import>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div style="height:25px;flex:none;display:flex;align-items:center;gap:14px;padding:0 14px;background:#f1f1f3;border-top:1px solid #e0e0e4;font:11px ui-monospace,'SF Mono',Menlo,monospace;color:#8a8a8e;">
+      <span style="display:flex;align-items:center;gap:5px;"><span style="{{ liveDotStyle }}"></span>{{ statusLeft }}</span>
+      <div style="flex:1;"></div>
+      <span>proxy 127.0.0.1:9090</span><span style="color:#d0d0d4;">·</span>
+      <span style="color:#30a14e;">CA Trusted</span><span style="color:#d0d0d4;">·</span><span>QUIC off</span>
+    </div>
+  </div>
+
+  <!-- MODALS -->
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:fixed;inset:0;background:rgba(20,20,24,.34);display:flex;align-items:center;justify-content:center;z-index:50;backdrop-filter:blur(1.5px);">
+
+      <sc-if value="{{ isAddPage }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:480px;background:#fff;border-radius:13px;box-shadow:0 24px 60px rgba(0,0,0,.4);overflow:hidden;">
+          <div style="padding:18px 22px 0;"><div style="font-size:16px;font-weight:600;color:#1d1d1f;">Add Page</div><div style="font-size:12px;color:#9a9aa0;margin-top:2px;">添加一个 URL，通过独立 Chrome 会话抓包。</div></div>
+          <div style="padding:18px 22px;display:flex;flex-direction:column;gap:14px;">
+            <label style="display:block;"><span style="font-size:11.5px;color:#8a8a8e;display:block;margin-bottom:5px;">URL</span><input value="https://app.acme.so/projects/proj_88" style="{{ inputStyle }}" /></label>
+            <div style="display:flex;gap:12px;">
+              <label style="flex:1;"><span style="font-size:11.5px;color:#8a8a8e;display:block;margin-bottom:5px;">Browser</span><div style="{{ selectStyle }}">Google Chrome ▾</div></label>
+              <label style="flex:1;"><span style="font-size:11.5px;color:#8a8a8e;display:block;margin-bottom:5px;">Capture Mode</span><div style="{{ selectStyle }}">Chrome Session ▾</div></label>
+            </div>
+            <div style="font-size:11.5px;color:#9a9aa0;background:#f6f6f8;border-radius:8px;padding:10px 12px;line-height:1.5;font-family:ui-monospace,Menlo,monospace;">--user-data-dir=…/Profiles/profile_001<br/>--proxy-server=127.0.0.1:9090 --disable-quic</div>
+          </div>
+          <div style="padding:14px 22px;background:#fafafb;border-top:1px solid #f0f0f2;display:flex;justify-content:flex-end;gap:9px;">
+            <button onClick="{{ closeModal }}" style="{{ secondaryBtn }}">取消</button>
+            <button onClick="{{ closeModal }}" style="{{ secondaryBtn }}">保存</button>
+            <button onClick="{{ openCertGuide }}" style="{{ primaryBtn }}">⏵ Open &amp; Capture</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isAddApp }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:480px;background:#fff;border-radius:13px;box-shadow:0 24px 60px rgba(0,0,0,.4);overflow:hidden;">
+          <div style="padding:18px 22px 0;"><div style="font-size:16px;font-weight:600;color:#1d1d1f;">Add App</div><div style="font-size:12px;color:#9a9aa0;margin-top:2px;">从已安装应用中选择，并指定启动模式。</div></div>
+          <div style="padding:14px 14px;max-height:240px;overflow:auto;">
+            <sc-for list="{{ scanApps }}" as="a" hint-placeholder-count="5">
+              <div style="{{ a.rowStyle }}"><span style="{{ a.iconStyle }}">{{ a.letter }}</span><span style="flex:1;font-size:13px;color:#1d1d1f;">{{ a.name }}</span><span style="font:11px ui-monospace,Menlo,monospace;color:#a0a0a6;">{{ a.bundle }}</span></div>
+            </sc-for>
+          </div>
+          <div style="padding:0 22px 14px;"><div style="font-size:11.5px;color:#9a9aa0;line-height:1.5;">启动模式：Normal · System Proxy Capture · <span style="color:#b0b0b6;">Transparent Capture (Coming Soon)</span></div></div>
+          <div style="padding:14px 22px;background:#fafafb;border-top:1px solid #f0f0f2;display:flex;justify-content:flex-end;gap:9px;">
+            <button onClick="{{ closeModal }}" style="{{ secondaryBtn }}">取消</button>
+            <button onClick="{{ closeModal }}" style="{{ primaryBtn }}">添加</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isCertGuide }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ stop }}" style="width:460px;background:#fff;border-radius:13px;box-shadow:0 24px 60px rgba(0,0,0,.4);overflow:hidden;">
+          <div style="padding:20px 22px 0;text-align:center;"><div style="font-size:34px;">🛡</div><div style="font-size:16px;font-weight:600;color:#1d1d1f;margin-top:6px;">信任 AppScope CA</div><div style="font-size:12px;color:#9a9aa0;margin-top:3px;line-height:1.5;">解密 HTTPS 前需要你手动安装并信任本机证书。</div></div>
+          <div style="padding:18px 24px;display:flex;flex-direction:column;gap:13px;">
+            <sc-for list="{{ guideSteps }}" as="g" hint-placeholder-count="3">
+              <div style="display:flex;gap:11px;align-items:flex-start;"><span style="width:21px;height:21px;border-radius:50%;background:#eef2fb;color:#1e66d0;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;">{{ g.n }}</span><span style="font-size:12.5px;color:#1d1d1f;line-height:1.5;">{{ g.text }}</span></div>
+            </sc-for>
+            <div style="font-size:11px;color:#8a6d3b;background:#fdf7ec;border:1px solid #f0e0c8;border-radius:8px;padding:9px 11px;line-height:1.5;">信任后 AppScope 即可解密其代理的 HTTPS 流量，请仅在受信任的设备上开启。</div>
+          </div>
+          <div style="padding:14px 22px;background:#fafafb;border-top:1px solid #f0f0f2;display:flex;justify-content:flex-end;gap:9px;">
+            <button onClick="{{ closeModal }}" style="{{ secondaryBtn }}">稍后</button>
+            <button onClick="{{ closeModal }}" style="{{ primaryBtn }}">打开钥匙串并信任</button>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:808},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#007aff&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;comfortable&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showWaterfall&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;defaultVariant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A&quot;,&quot;B&quot;],&quot;default&quot;:&quot;A&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+const STAG = '<scr'+'ipt';
+const ETAG = '</scr'+'ipt>';
+
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    this.D = this.buildData();
+    this.state = {
+      navMode:'sessions', activeId:'acme', variant: (props.defaultVariant||'A'),
+      filter:'all', query:'', recording:true, modal:null, clear:{},
+      selectedFlowId: this.D.defaultSel, launchMode:'normal',
+      toggles:{ mask:true, quic:true, login:false, autoclean:true }
+    };
+  }
+
+  fmtSize(b){ if(b==null) return '—'; if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(2)+' MB'; }
+  mc(m){ return ({GET:'#2d7d46',POST:'#1e66d0',PUT:'#b26b00',PATCH:'#7a5af0',DELETE:'#c03030'})[m] || '#5b6470'; }
+  sc(s){ if(s==null) return '#8a8a8e'; if(s===101) return '#7a5af0'; if(s<300) return '#30a14e'; if(s<400) return '#8a8a8e'; if(s<500) return '#e08600'; return '#d23b30'; }
+  cat(t){ return ({document:'doc',stylesheet:'css',script:'js',image:'img',font:'font',websocket:'ws',xhr:'fetch',fetch:'fetch'})[t]||'other'; }
+  catColor(c){ return ({doc:'#1e66d0',css:'#7a5af0',js:'#e0863b',img:'#30a14e',font:'#b26b00',ws:'#7a5af0',fetch:'#2d7d46'})[c]||'#8a8a8e'; }
+
+  reqH(o){
+    const a=[ {name:':authority',value:o.host},{name:':method',value:o.method||'GET'},{name:':path',value:o.path},{name:':scheme',value:'https'},
+      {name:'user-agent',value:UA},{name:'accept',value:o.accept||'*/*'},{name:'accept-encoding',value:'gzip, deflate, br'},{name:'accept-language',value:'en-US,en;q=0.9'} ];
+    if(o.referer) a.push({name:'referer',value:o.referer});
+    if(o.origin) a.push({name:'origin',value:'https://app.acme.so'});
+    if(o.auth) a.push({name:'authorization',value:'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c3JfOTAyMSJ9.kQ3v2xR8',sensitive:true});
+    if(o.ctype) a.push({name:'content-type',value:o.ctype});
+    if(o.cookie) a.push({name:'cookie',value:'acme_session=s%3Aa1b2c3d4e5; theme=light',sensitive:true});
+    return a;
+  }
+  respH(o){
+    const a=[ {name:':status',value:String(o.status==null?'(pending)':o.status)},{name:'content-type',value:o.ctype},{name:'content-length',value:String(o.len||0)},
+      {name:'date',value:'Thu, 18 Jun 2026 10:02:14 GMT'},{name:'server',value:o.server||'cloudflare'},{name:'cache-control',value:o.cache||'private, no-cache'} ];
+    if(o.enc!==false) a.push({name:'content-encoding',value:'br'});
+    if(o.cors) a.push({name:'access-control-allow-origin',value:'https://app.acme.so'});
+    if(o.setcookie) a.push({name:'set-cookie',value:'acme_session=s%3Af9e8d7; Path=/; HttpOnly; Secure; SameSite=Lax',sensitive:true});
+    if(o.ratelimit) a.push({name:'x-ratelimit-remaining',value:'4982'});
+    if(o.reqid) a.push({name:'x-request-id',value:o.reqid});
+    return a;
+  }
+  tg(o){ return { blocked:o.b||0.8, dns:o.conn?5.2:0, connect:o.conn?9.4:0, tls:o.conn?23.1:0, send:0.4, wait:o.wait||0, receive:o.recv||0 }; }
+
+  buildData(){
+    let i=0; const id=()=>'f'+(i++);
+    const mk=(o)=>{ o.id=id(); o.url='https://'+o.host+o.path; o.scheme='https'; o.typeLabel=o.type;
+      o.sizeLabel=o.status==null?'(pending)':this.fmtSize(o.size); o.reqSizeLabel=this.fmtSize(o.reqSize||0); o.remote=(o.host.includes('localhost')?'127.0.0.1':'104.18.6.21')+':443'; o.protocol=o.protocol||'h2';
+      o.reqHeaders=this.reqH(o.rh||{host:o.host,path:o.path,method:o.method,accept:o.accept}); o.respHeaders=o.status==null?[]:this.respH(o.sh||{status:o.status,ctype:o.mime,len:o.size}); return o; };
+
+    const ME = '{\n  "id": "usr_9021",\n  "name": "J. Rivera",\n  "email": "j.rivera@acme.so",\n  "role": "admin",\n  "workspace": { "id": "ws_12", "name": "Acme Inc", "plan": "business" },\n  "feature_flags": ["new_inbox", "ai_summaries"]\n}';
+    const PROJECTS = '{\n  "data": [\n    { "id": "proj_88", "name": "Q3 Onboarding Revamp", "status": "active", "tasks": 42 },\n    { "id": "proj_71", "name": "Billing Migration", "status": "active", "tasks": 17 },\n    { "id": "proj_64", "name": "Mobile Beta", "status": "archived", "tasks": 8 }\n  ],\n  "page": { "limit": 20, "next_cursor": null, "total": 3 }\n}';
+    const TASKS = '{\n  "data": [\n    { "id": "tsk_5012", "title": "Audit signup funnel", "done": false, "assignee": "usr_9021" },\n    { "id": "tsk_5013", "title": "Write welcome email", "done": true, "assignee": "usr_7740" }\n  ]\n}';
+    const HTML = '<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="utf-8" />\n    <title>Acme Console</title>\n    <link rel="stylesheet" href="/assets/index-4f2a.css" />\n    '+STAG+' type="module" src="/assets/index-9c1b.js">'+ETAG+'\n  </head>\n  <body><div id="root"></div></body>\n</html>';
+    const CSS = ':root{--bg:#0b0b0f;--fg:#f5f5f7}\n.app-shell{display:grid;grid-template-columns:240px 1fr}\n.btn{border-radius:8px;padding:8px 14px;font:500 13px ui-sans-serif}';
+    const JS = 'import{r as e,j as t}from"./vendor-2e8d.js";\nconst o=e.createContext(null);\nexport function App(){return t.jsx("div",{className:"app-shell"})}';
+    const ERR403 = '{\n  "error": {\n    "code": "forbidden",\n    "message": "You do not have access to members of this project.",\n    "request_id": "req_3f9a2c"\n  }\n}';
+    const ERR500 = '{\n  "error": {\n    "code": "internal_error",\n    "message": "Unexpected error while aggregating usage.",\n    "request_id": "req_7b1e44"\n  }\n}';
+
+    const acme=[
+      mk({method:'GET',status:200,statusText:'OK',host:'app.acme.so',path:'/projects/proj_88',type:'document',mime:'text/html; charset=utf-8',size:14620,time:284,started:'10:02:14.213',initiator:'Other',rh:{host:'app.acme.so',path:'/projects/proj_88',method:'GET',accept:'text/html',cookie:true},sh:{status:200,ctype:'text/html; charset=utf-8',len:14620,reqid:'req_aa01'},reqBody:{kind:'none'},respBody:{kind:'html',ctype:'text/html · 14.3 KB',text:HTML},reqCookies:[{name:'acme_session',value:'s%3Aa1b2c3d4e5',sensitive:true},{name:'theme',value:'light'}],timing:this.tg({conn:true,wait:248,recv:31})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'cdn.acme.so',path:'/assets/index-4f2a.css',type:'stylesheet',mime:'text/css',size:90112,time:96,started:'10:02:14.498',initiator:'(index):8',respBody:{kind:'css',ctype:'text/css · 88 KB',text:CSS},timing:this.tg({conn:true,wait:54,recv:18})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'cdn.acme.so',path:'/assets/index-9c1b.js',type:'script',mime:'application/javascript',size:421888,time:142,started:'10:02:14.502',initiator:'(index):9',respBody:{kind:'js',ctype:'application/javascript · 412 KB',text:JS},timing:this.tg({wait:61,recv:79})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'cdn.acme.so',path:'/assets/vendor-2e8d.js',type:'script',mime:'application/javascript',size:1153434,time:268,started:'10:02:14.512',initiator:'index-9c1b.js:1',respBody:{kind:'js',ctype:'application/javascript · 1.10 MB',text:'/* minified vendor bundle — react, react-dom, tanstack-query */'},timing:this.tg({wait:71,recv:195})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'cdn.acme.so',path:'/fonts/Inter-roman.var.woff2',type:'font',mime:'font/woff2',size:49152,time:48,started:'10:02:14.690',initiator:'index-4f2a.css:1',respBody:{kind:'font',ctype:'font/woff2 · 48 KB',note:'woff2 font · 48 KB'},timing:this.tg({wait:22,recv:24})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'api.acme.so',path:'/v1/me',type:'xhr',mime:'application/json',size:412,time:118,started:'10:02:14.901',initiator:'index-9c1b.js:1402',rh:{host:'api.acme.so',path:'/v1/me',method:'GET',accept:'application/json',auth:true,origin:true,cookie:true},sh:{status:200,ctype:'application/json',len:412,cors:true,ratelimit:true,reqid:'req_b220'},respBody:{kind:'json',ctype:'application/json · 412 B',text:ME},reqCookies:[{name:'acme_session',value:'s%3Aa1b2c3d4e5',sensitive:true}],timing:this.tg({conn:true,wait:74,recv:9})}),
+      mk({method:'POST',status:200,statusText:'OK',host:'api.acme.so',path:'/v1/auth/refresh',type:'fetch',mime:'application/json',size:286,reqSize:96,time:134,started:'10:02:14.902',initiator:'index-9c1b.js:980',rh:{host:'api.acme.so',path:'/v1/auth/refresh',method:'POST',accept:'application/json',auth:true,origin:true,ctype:'application/json',cookie:true},sh:{status:200,ctype:'application/json',len:286,cors:true,setcookie:true,reqid:'req_b221'},reqBody:{kind:'json',ctype:'application/json · 96 B',text:'{ "refresh_token": "rt_8f2c…redacted" }'},respBody:{kind:'json',ctype:'application/json · 286 B',text:'{\n  "access_token": "eyJ…",\n  "token_type": "Bearer",\n  "expires_in": 3600\n}'},respCookies:[{name:'acme_session',value:'s%3Af9e8d7',sensitive:true,domain:'.acme.so',path:'/',httpOnly:true,secure:true}],timing:this.tg({wait:118,recv:8})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'api.acme.so',path:'/v1/projects?limit=20',type:'xhr',mime:'application/json',size:684,time:92,started:'10:02:15.040',initiator:'index-9c1b.js:1455',rh:{host:'api.acme.so',path:'/v1/projects?limit=20',method:'GET',accept:'application/json',auth:true,origin:true},sh:{status:200,ctype:'application/json',len:684,cors:true,reqid:'req_b230'},respBody:{kind:'json',ctype:'application/json · 684 B',text:PROJECTS},timing:this.tg({wait:80,recv:6})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'api.acme.so',path:'/v1/projects/proj_88/tasks',type:'xhr',mime:'application/json',size:540,time:104,started:'10:02:15.044',initiator:'index-9c1b.js:1460',rh:{host:'api.acme.so',path:'/v1/projects/proj_88/tasks',method:'GET',accept:'application/json',auth:true,origin:true},sh:{status:200,ctype:'application/json',len:540,cors:true,reqid:'req_b231'},respBody:{kind:'json',ctype:'application/json · 540 B',text:TASKS},timing:this.tg({wait:92,recv:7})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'cdn.acme.so',path:'/avatars/usr_9021.webp',type:'image',mime:'image/webp',size:12480,time:54,started:'10:02:15.210',initiator:'react-dom:441',respBody:{kind:'image',ctype:'image/webp · 12.2 KB',note:'image/webp · 96×96'},timing:this.tg({wait:30,recv:14})}),
+      mk({method:'GET',status:304,statusText:'Not Modified',host:'cdn.acme.so',path:'/og/banner.png',type:'image',mime:'image/png',size:0,time:38,started:'10:02:15.215',initiator:'react-dom:512',respBody:{kind:'none'},timing:this.tg({wait:36,recv:0})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'cdn.acme.so',path:'/assets/logo.svg',type:'image',mime:'image/svg+xml',size:2048,time:32,started:'10:02:15.260',initiator:'index-9c1b.js:88',respBody:{kind:'text',ctype:'image/svg+xml · 2 KB',text:'<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">\n  <rect width="32" height="32" rx="7" fill="#1d1d1f"/>\n  <path d="M9 22 16 9l7 13" stroke="#fff" stroke-width="2" fill="none"/>\n</svg>'},timing:this.tg({wait:24,recv:5})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'api.acme.so',path:'/v1/notifications?unread=1',type:'fetch',mime:'application/json',size:128,time:88,started:'10:02:15.420',initiator:'index-9c1b.js:1502',rh:{host:'api.acme.so',path:'/v1/notifications?unread=1',method:'GET',accept:'application/json',auth:true,origin:true},sh:{status:200,ctype:'application/json',len:128,cors:true,reqid:'req_b240'},respBody:{kind:'json',ctype:'application/json · 128 B',text:'{ "data": [], "unread_count": 0 }'},timing:this.tg({wait:80,recv:5})}),
+      mk({method:'GET',status:101,statusText:'Switching Protocols',host:'api.acme.so',path:'/v1/realtime',type:'websocket',mime:'',size:0,time:0,started:'10:02:15.500',initiator:'index-9c1b.js:1610',rh:{host:'api.acme.so',path:'/v1/realtime',method:'GET',accept:'*/*',origin:true,cookie:true},sh:{status:101,ctype:'—',len:0,enc:false,reqid:'req_b250'},respBody:{kind:'none'},timing:this.tg({conn:true,wait:0,recv:0}),protocol:'websocket'}),
+      mk({method:'POST',status:204,statusText:'No Content',host:'api.acme.so',path:'/v1/events',type:'fetch',mime:'application/json',size:0,reqSize:240,time:64,started:'10:02:15.700',initiator:'analytics.js:12',rh:{host:'api.acme.so',path:'/v1/events',method:'POST',accept:'*/*',origin:true,ctype:'application/json'},sh:{status:204,ctype:'—',len:0,enc:false,cors:true,reqid:'req_b260'},reqBody:{kind:'json',ctype:'application/json · 240 B',text:'{ "event": "page_view", "path": "/projects/proj_88", "ts": 1781 }'},respBody:{kind:'none'},timing:this.tg({wait:60,recv:0})}),
+      mk({method:'POST',status:201,statusText:'Created',host:'api.acme.so',path:'/v1/tasks',type:'fetch',mime:'application/json',size:208,reqSize:118,time:156,started:'10:02:16.010',initiator:'index-9c1b.js:1721',rh:{host:'api.acme.so',path:'/v1/tasks',method:'POST',accept:'application/json',auth:true,origin:true,ctype:'application/json'},sh:{status:201,ctype:'application/json',len:208,cors:true,reqid:'req_b270'},reqBody:{kind:'json',ctype:'application/json · 118 B',text:'{\n  "project_id": "proj_88",\n  "title": "Review onboarding copy"\n}'},respBody:{kind:'json',ctype:'application/json · 208 B',text:'{\n  "id": "tsk_5099",\n  "title": "Review onboarding copy",\n  "done": false\n}'},timing:this.tg({wait:148,recv:6})}),
+      mk({method:'GET',status:403,statusText:'Forbidden',host:'api.acme.so',path:'/v1/projects/proj_88/members',type:'xhr',mime:'application/json',size:172,time:78,started:'10:02:16.220',initiator:'index-9c1b.js:1780',rh:{host:'api.acme.so',path:'/v1/projects/proj_88/members',method:'GET',accept:'application/json',auth:true,origin:true},sh:{status:403,ctype:'application/json',len:172,cors:true,reqid:'req_3f9a2c'},respBody:{kind:'json',ctype:'application/json · 172 B',text:ERR403},timing:this.tg({wait:72,recv:4}),error:'403 Forbidden'}),
+      mk({method:'GET',status:500,statusText:'Internal Server Error',host:'api.acme.so',path:'/v1/billing/usage',type:'xhr',mime:'application/json',size:158,time:642,started:'10:02:16.400',initiator:'index-9c1b.js:1822',rh:{host:'api.acme.so',path:'/v1/billing/usage',method:'GET',accept:'application/json',auth:true,origin:true},sh:{status:500,ctype:'application/json',len:158,cors:true,reqid:'req_7b1e44'},respBody:{kind:'json',ctype:'application/json · 158 B',text:ERR500},timing:this.tg({wait:636,recv:4}),error:'500 Internal Server Error'}),
+      mk({method:'GET',status:null,host:'api.acme.so',path:'/v1/search?q=onboarding',type:'fetch',mime:'application/json',size:null,time:null,started:'10:02:16.900',initiator:'index-9c1b.js:1901',rh:{host:'api.acme.so',path:'/v1/search?q=onboarding',method:'GET',accept:'application/json',auth:true,origin:true},reqBody:{kind:'none'},respBody:{kind:'none'},timing:this.tg({wait:0,recv:0})}),
+    ];
+
+    const local=[
+      mk({method:'GET',status:200,statusText:'OK',host:'localhost:3000',path:'/',type:'document',mime:'text/html',size:512,time:6,started:'11:14:02.001',initiator:'Other',protocol:'http/1.1',respBody:{kind:'html',ctype:'text/html · 512 B',text:'<!doctype html><html><body><div id="root"></div>'+STAG+' type="module" src="/src/main.tsx">'+ETAG+'</body></html>'},timing:this.tg({conn:true,wait:3,recv:1})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'localhost:3000',path:'/@vite/client',type:'script',mime:'application/javascript',size:18432,time:8,started:'11:14:02.020',initiator:'(index)',protocol:'http/1.1',respBody:{kind:'js',ctype:'application/javascript · 18 KB',text:'// vite client — HMR runtime'},timing:this.tg({wait:5,recv:2})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'localhost:3000',path:'/src/main.tsx',type:'script',mime:'application/javascript',size:2240,time:11,started:'11:14:02.030',initiator:'(index)',protocol:'http/1.1',respBody:{kind:'js',ctype:'application/javascript · 2.2 KB',text:'import { createRoot } from "react-dom/client"\nimport App from "./App"\ncreateRoot(document.getElementById("root")).render(<App/>)'},timing:this.tg({wait:7,recv:2})}),
+      mk({method:'GET',status:101,statusText:'Switching Protocols',host:'localhost:3000',path:'/',type:'websocket',mime:'',size:0,time:0,started:'11:14:02.044',initiator:'@vite/client',protocol:'websocket',respBody:{kind:'none'},timing:this.tg({conn:true})}),
+      mk({method:'GET',status:200,statusText:'OK',host:'localhost:3000',path:'/api/health',type:'fetch',mime:'application/json',size:34,time:5,started:'11:14:02.210',initiator:'main.tsx:14',protocol:'http/1.1',respBody:{kind:'json',ctype:'application/json · 34 B',text:'{ "status": "ok" }'},timing:this.tg({wait:3,recv:1})}),
+      mk({method:'GET',status:404,statusText:'Not Found',host:'localhost:3000',path:'/api/v2/flags',type:'fetch',mime:'application/json',size:52,time:4,started:'11:14:02.260',initiator:'main.tsx:22',protocol:'http/1.1',respBody:{kind:'json',ctype:'application/json · 52 B',text:'{ "error": "not_found" }'},timing:this.tg({wait:3,recv:1}),error:'404 Not Found'}),
+    ];
+
+    return {
+      defaultSel: acme[5].id,
+      pages:[
+        {id:'acme',name:'Acme Console',host:'app.acme.so',status:'capturing',letter:'A',color:'#1e66d0',flows:acme},
+        {id:'admin',name:'Admin Dashboard',host:'admin.acme.so',status:'idle',letter:'A',color:'#b26b00',flows:[]},
+        {id:'local',name:'localhost:3000',host:'Vite dev server',status:'capturing',letter:'L',color:'#30a14e',flows:local},
+      ],
+      apps:[
+        {id:'chrome',name:'Google Chrome',bundle:'com.google.Chrome',path:'/Applications/Google Chrome.app',mode:'Normal launch',letter:'C',color:'#5b6470'},
+        {id:'slack',name:'Slack',bundle:'com.tinyspeck.slackmacgap',path:'/Applications/Slack.app',mode:'System Proxy',letter:'S',color:'#7a5af0'},
+        {id:'code',name:'Visual Studio Code',bundle:'com.microsoft.VSCode',path:'/Applications/Visual Studio Code.app',mode:'Normal launch',letter:'V',color:'#1e66d0'},
+      ],
+    };
+  }
+
+  find(idv){ return this.D.pages.find(p=>p.id===idv) || this.D.apps.find(a=>a.id===idv); }
+  isApp(idv){ return !!this.D.apps.find(a=>a.id===idv); }
+  activeFlows(idv){ const a=idv||this.state.activeId; if(this.isApp(a)) return []; const p=this.find(a); if(!p) return []; return this.state.clear[a]? [] : p.flows; }
+  firstId(idv){ const f=this.activeFlows(idv); if(!f.length) return null; return f.find(x=>x.id===this.D.defaultSel)?this.D.defaultSel:f[0].id; }
+  selectSession(idv){ const isApp=this.isApp(idv); this.setState({ navMode:'sessions', activeId:idv, selectedFlowId: isApp? this.state.selectedFlowId : this.firstId(idv) }); }
+  flowT0(f){ const fs=this.activeFlows(); const idx=fs.indexOf(f); return idx<0?0:idx*42; }
+
+  renderVals(){
+    const st=this.state;
+    const accent = this.props.accent || '#007aff';
+    const compact = (this.props.density||'comfortable')==='compact';
+    const showWaterfall = this.props.showWaterfall !== false;
+    const active = this.find(st.activeId);
+    const isApp = this.isApp(st.activeId);
+    const sessionsMode = st.navMode==='sessions';
+    const flows = this.activeFlows();
+
+    const rowBase='display:flex;align-items:center;gap:9px;width:100%;border:none;background:none;cursor:pointer;border-radius:8px;padding:6px 9px;margin-bottom:1px;';
+    const rowSel=rowBase+'background:'+accent+'22;';
+    const navBase='display:flex;align-items:center;gap:9px;width:100%;border:none;background:none;cursor:pointer;border-radius:7px;padding:6px 9px;font:13px -apple-system,system-ui;color:#1d1d1f;text-align:left;';
+    const navSel=navBase+'background:'+accent+'1f;';
+    const icon=(c)=>'width:24px;height:24px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;background:'+c+';';
+
+    const mkSrc=(p,kind)=>{ const sel=sessionsMode && st.activeId===p.id; const dot=p.status==='capturing'?'#30a14e':'#c4c4c8';
+      return { ...p, onClick:()=>this.selectSession(p.id), rowStyle: sel?rowSel:rowBase, fg:'#1d1d1f', sub:'#9a9aa0',
+        dotStyle: kind==='page'? 'width:7px;height:7px;border-radius:50%;flex:none;background:'+dot+';'+(p.status==='capturing'?'animation:ascPulse 1.6s infinite;':'') : 'display:none;', iconStyle:icon(p.color) }; };
+    const pageRows=this.D.pages.map(p=>mkSrc(p,'page'));
+    const appRows=this.D.apps.map(p=>mkSrc(p,'app'));
+
+    const fcat=st.filter; const q=st.query.trim().toLowerCase();
+    const filtered = flows.filter(f=>{ if(fcat==='all'){} else if(fcat==='err'){ if(!(f.status&&f.status>=400)) return false; } else if(this.cat(f.type)!==fcat) return false;
+      if(q && !((f.path+f.host+f.method).toLowerCase().includes(q))) return false; return true; });
+
+    const maxEnd = Math.max(1, ...flows.map(f=>this.flowT0(f)+(f.time||0)));
+    const rowPad = compact?'4px 12px':'7px 12px';
+    const rows = filtered.map((f)=>{ const sel=f.id===st.selectedFlowId; const sCol=this.sc(f.status); const cCol=this.catColor(this.cat(f.type));
+      const fg= sel?'#fff':'#1d1d1f'; const sub= sel?'rgba(255,255,255,.82)':'#9a9aa0';
+      const baseA='display:grid;grid-template-columns:54px 64px 1fr 150px 78px 74px 70px;align-items:center;width:100%;border:none;cursor:pointer;text-align:left;padding:'+rowPad+';border-bottom:1px solid #f4f4f6;background:'+(sel?accent:'transparent')+';';
+      const baseB='display:grid;grid-template-columns:1fr 60px 60px 80px 130px 70px 200px;align-items:center;width:100%;border:none;cursor:pointer;text-align:left;padding:'+rowPad+';border-bottom:1px solid #f4f4f6;background:'+(sel?accent:'transparent')+';';
+      const t0=this.flowT0(f); const dur=f.time||(f.status==null?0:6);
+      return { id:f.id, onClick:()=>this.setState({selectedFlowId:f.id}), rowStyleA:baseA, rowStyleB:baseB, fg, sub,
+        method:f.method, methodStyle:'font:600 11px ui-monospace,Menlo,monospace;color:'+(sel?'#fff':this.mc(f.method))+';',
+        statusText: f.status==null?'···':(f.status===101?'101':String(f.status)), statusStyle:'font:600 11.5px ui-monospace,Menlo,monospace;color:'+(sel?'#fff':sCol)+';',
+        dotStyle:'width:7px;height:7px;border-radius:50%;flex:none;background:'+(sel?'#fff':sCol)+';'+(f.status==null?'animation:ascPulse 1s infinite;':''),
+        name:f.path, host:f.host, typeLabel:this.cat(f.type)==='fetch'?(f.type==='xhr'?'xhr':'fetch'):this.cat(f.type), initiator:f.initiator, sizeLabel:f.sizeLabel, timeLabel: f.time==null?'—':(f.time+' ms'),
+        wfStyle:'position:absolute;top:3px;height:7px;border-radius:3px;left:'+((t0/maxEnd)*100).toFixed(1)+'%;width:'+Math.max(1.5,(dur/maxEnd)*100).toFixed(1)+'%;background:'+(sel?'#fff':cCol)+';' };
+    });
+
+    const chipDefs=[['all','All'],['fetch','Fetch/XHR'],['js','JS'],['css','CSS'],['img','Img'],['font','Font'],['doc','Doc'],['ws','WS'],['err','Errors']];
+    const chipBase='appearance:none;border:none;cursor:pointer;font:11px -apple-system,system-ui;padding:3px 9px;border-radius:6px;';
+    const filterChips=chipDefs.map(([k,l])=>({ label:l, onClick:()=>this.setState({filter:k}), style: chipBase+(st.filter===k?('background:'+accent+';color:#fff;font-weight:600;'):'background:transparent;color:#6e6e73;') }));
+
+    const selectedFlow = flows.find(f=>f.id===st.selectedFlowId) || null;
+    const done=flows.filter(f=>f.status!=null); const xfer=done.reduce((a,f)=>a+(f.size||0),0);
+    const statusLeft = isApp? (active?active.name+' · Normal launch':'') : (flows.length? (flows.length+' requests · '+this.fmtSize(xfer)+' transferred · finish 2.7 s') : 'Idle — no requests');
+
+    const lmDefs=[['normal','Normal','仅作为启动器，不注入代理',false],['system','System Proxy Capture','设置系统代理后启动，抓取遵循系统代理的应用',false],['transparent','Transparent Capture','Network Extension 按 App 透明抓包',true]];
+    const launchModes=lmDefs.map(([k,l,d,soon])=>{ const sel=st.launchMode===k; return { label:l, desc:d, soon, onClick: soon?(()=>{}):(()=>this.setState({launchMode:k})),
+      rowStyle:'display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:1px solid '+(sel?accent:'#e6e6ea')+';background:'+(sel?accent+'10':'#fff')+';border-radius:10px;padding:11px 13px;cursor:'+(soon?'default':'pointer')+';opacity:'+(soon?'.55':'1')+';',
+      radioStyle:'width:16px;height:16px;border-radius:50%;flex:none;border:'+(sel?'5px solid '+accent:'2px solid #c4c4ca')+';' }; });
+
+    const certSteps=['Generated','Installed','Trusted'].map((l,idx,arr)=>({ label:l, mark:'✓', connector: idx<arr.length-1, labelColor:'#30a14e',
+      dotStyle:'width:26px;height:26px;border-radius:50%;background:#30a14e;color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;' }));
+
+    const tg=(k)=>()=>this.setState(s=>({toggles:{...s.toggles,[k]:!s.toggles[k]}}));
+    const toggleRow=(label,desc,key)=>{ const on=st.toggles[key]; return { label, desc, hasDesc:!!desc, isToggle:true, isValue:false, onToggle:tg(key),
+      toggleStyle:'width:38px;height:22px;border-radius:11px;border:none;cursor:pointer;position:relative;background:'+(on?accent:'#d4d4da')+';',
+      knobStyle:'position:absolute;top:2px;left:'+(on?'18px':'2px')+';width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);' }; };
+    const valRow=(label,desc,value)=>({label,desc,hasDesc:!!desc,isToggle:false,isValue:true,value});
+    const settingSections=[
+      {title:'General',rows:[ toggleRow('开机自启动','','login'), valRow('外观','','Light') ]},
+      {title:'Proxy',rows:[ valRow('代理端口','本地 MITM 代理监听端口','127.0.0.1:9090'), toggleRow('禁用 QUIC','启动 Chrome 时附加 --disable-quic','quic') ]},
+      {title:'Capture',rows:[ toggleRow('脱敏敏感字段','Authorization / Cookie / token 默认隐藏','mask'), valRow('Body 上限','超过则只保留元数据','10 MB') ]},
+      {title:'Data',rows:[ valRow('保留策略','','最近 7 天'), toggleRow('超过 10 GB 自动清理','','autoclean') ]},
+    ];
+
+    const scanApps=[['Google Chrome','com.google.Chrome','C','#5b6470'],['Safari','com.apple.Safari','S','#1e66d0'],['Slack','com.tinyspeck.slackmacgap','S','#7a5af0'],['Discord','com.hnc.Discord','D','#5b6470'],['Visual Studio Code','com.microsoft.VSCode','V','#1e66d0']].map(([n,b,l,c])=>({ name:n,bundle:b,letter:l, rowStyle:'display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:8px;cursor:pointer;', iconStyle:icon(c) }));
+
+    const guideSteps=[{n:'1',text:'点击下方按钮，AppScope 会打开「钥匙串访问」并定位到 AppScope CA。'},{n:'2',text:'在证书上右键 → 显示简介 → 信任 →「使用此证书时」选择「始终信任」。'},{n:'3',text:'输入系统密码确认。AppScope 会自动检测信任状态并继续抓包。'}];
+
+    const seg=(on)=>'appearance:none;border:none;cursor:pointer;font:11.5px -apple-system,system-ui;font-weight:'+(on?'600':'500')+';padding:4px 11px;border-radius:5px;color:'+(on?'#1d1d1f':'#7a7a80')+';background:'+(on?'#fff':'transparent')+';'+(on?'box-shadow:0 1px 2px rgba(0,0,0,.12);':'');
+    const primaryBtn='appearance:none;border:none;cursor:pointer;font:13px -apple-system,system-ui;font-weight:500;color:#fff;background:'+accent+';border-radius:8px;padding:8px 16px;';
+
+    return {
+      titleSuffix: st.navMode==='certs'?'Certificates': st.navMode==='settings'?'Settings': (active?active.name:'AppScope'),
+      setVarA:()=>this.setState({variant:'A'}), setVarB:()=>this.setState({variant:'B'}), varAStyle:seg(st.variant==='A'), varBStyle:seg(st.variant==='B'),
+      query:st.query, setQuery:(e)=>this.setState({query:e.target.value}),
+      selectAll:()=>this.selectSession('acme'), totalCount: this.D.pages.reduce((a,p)=>a+(this.state.clear[p.id]?0:p.flows.length),0)+'',
+      allRowStyle: (sessionsMode&&st.activeId==='acme')?navSel:navBase,
+      pageRows, appRows, openAddPage:()=>this.setState({modal:'addPage'}), openAddApp:()=>this.setState({modal:'addApp'}),
+      goCerts:()=>this.setState({navMode:'certs'}), goSettings:()=>this.setState({navMode:'settings'}),
+      certNavStyle: st.navMode==='certs'?navSel:navBase, settingsNavStyle: st.navMode==='settings'?navSel:navBase,
+
+      showCerts: st.navMode==='certs', showSettings: st.navMode==='settings',
+      showApp: sessionsMode && isApp, showEmpty: sessionsMode && !isApp && flows.length===0, showFlows: sessionsMode && !isApp && flows.length>0,
+      isVarA: st.variant==='A', isVarB: st.variant==='B', showWaterfall,
+
+      rows, filterChips, selectedFlow,
+      recording:st.recording, toggleRecord:()=>this.setState(s=>({recording:!s.recording})),
+      recordBtnStyle:'appearance:none;border:1px solid #e2e2e6;cursor:pointer;font:11.5px -apple-system,system-ui;font-weight:500;color:'+(st.recording?'#c0392b':'#6e6e73')+';background:#fff;border-radius:7px;padding:4px 10px;display:flex;align-items:center;gap:6px;',
+      recordDotStyle:'width:8px;height:8px;border-radius:50%;background:'+(st.recording?'#c0392b':'#b0b0b6')+';'+(st.recording?'animation:ascPulse 1.4s infinite;':''),
+      recordLabel: st.recording?'Recording':'Paused',
+      clearFlows:()=>this.setState(s=>({clear:{...s.clear,[s.activeId]:true},selectedFlowId:null})),
+
+      statusLeft, liveDotStyle:'width:7px;height:7px;border-radius:50%;background:'+(st.recording&&flows.length?'#30a14e':'#c4c4c8')+';'+(st.recording&&flows.length?'animation:ascPulse 1.6s infinite;':''),
+
+      appName: active?active.name:'', appLetter: active?active.letter:'', appBundle: active?active.bundle:'', appPath: active?active.path:'',
+      appBigIcon: 'width:78px;height:78px;border-radius:18px;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:700;color:#fff;background:'+(active?active.color:'#888')+';',
+      launchModes,
+
+      certSteps, settingSections, scanApps, guideSteps,
+      primaryBtn, primaryBtnWide: primaryBtn+'width:100%;margin-top:18px;padding:11px;font-size:14px;',
+      secondaryBtn:'appearance:none;cursor:pointer;font:13px -apple-system,system-ui;font-weight:500;color:#1d1d1f;background:#fff;border:1px solid #d8d8dc;border-radius:8px;padding:8px 15px;',
+      dangerBtn:'appearance:none;cursor:pointer;font:13px -apple-system,system-ui;font-weight:500;color:#c0392b;background:#fff;border:1px solid #ecc;border-radius:8px;padding:8px 15px;',
+      inputStyle:'width:100%;box-sizing:border-box;border:1px solid #d8d8dc;border-radius:8px;padding:8px 11px;font:13px ui-monospace,Menlo,monospace;color:#1d1d1f;outline:none;',
+      selectStyle:'border:1px solid #d8d8dc;border-radius:8px;padding:8px 11px;font:13px -apple-system,system-ui;color:#1d1d1f;background:#fff;',
+
+      modalOpen: st.modal!=null, isAddPage: st.modal==='addPage', isAddApp: st.modal==='addApp', isCertGuide: st.modal==='certGuide',
+      closeModal:()=>this.setState({modal:null}), openCertGuide:()=>this.setState({modal:'certGuide'}), stop:(e)=>{ e.stopPropagation(); },
+    };
+  }
+}
+</script>
+</body>
+</html>
