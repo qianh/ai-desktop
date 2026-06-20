@@ -224,6 +224,10 @@ export async function getPageWebviewUrl(pageId: string): Promise<string | null> 
   return call<string | null>("get_page_webview_url", { pageId });
 }
 
+export async function setPageWebviewVisible(pageId: string, visible: boolean): Promise<void> {
+  await call<void>("set_page_webview_visible", { pageId, visible });
+}
+
 export async function closePageWebview(pageId: string): Promise<void> {
   await call<void>("close_page_webview", { pageId });
 }

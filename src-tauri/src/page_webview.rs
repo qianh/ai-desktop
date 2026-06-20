@@ -153,6 +153,19 @@ pub fn get_page_webview_url(app: AppHandle, page_id: String) -> Result<Option<St
 }
 
 #[tauri::command]
+pub fn set_page_webview_visible(app: AppHandle, page_id: String, visible: bool) -> Result<(), String> {
+    let label = sanitize_webview_label(&page_id);
+    if let Some(webview) = app.get_webview(&label) {
+        if visible {
+            webview.show().map_err(|e| e.to_string())?;
+        } else {
+            webview.hide().map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn close_page_webview(app: AppHandle, page_id: String) -> Result<(), String> {
     let label = sanitize_webview_label(&page_id);
     if let Some(webview) = app.get_webview(&label) {

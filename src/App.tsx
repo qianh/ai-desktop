@@ -14,6 +14,7 @@ import {
   mapFlowListItem,
   openCertificateGuide,
   closePageWebview,
+  setPageWebviewVisible,
   openPageWithCapture,
   removeApp,
   removeCertificate,
@@ -198,6 +199,8 @@ export default function App() {
     ? `${flows.length} requests · ${fmtSize(xfer)} transferred`
     : "Idle — no requests";
 
+  const toggleInspector = useCallback(() => setInspectorOpen((v) => !v), []);
+
   const clearFlows = () => {
     setClear((c) => ({ ...c, [activeId]: true }));
     setSelectedFlowId(null);
@@ -293,8 +296,8 @@ export default function App() {
 
   const handleDeletePage = (pageId: string) => {
     const page = pages.find((p) => p.id === pageId);
-    // Native child webview renders above HTML — close it first so the confirm dialog is visible.
-    void closePageWebview(pageId).catch(() => undefined);
+    // Native child webview renders above HTML — hide it so the confirm dialog is visible.
+    void setPageWebviewVisible(pageId, false).catch(() => undefined);
     setDeleteTarget({ id: pageId, name: page?.name || "Page" });
   };
 
@@ -398,6 +401,7 @@ export default function App() {
   );
 
   const activeSessionMeta = sessionMetaByPage[activeId];
+  const noOverlay = modal == null && deleteTarget == null && deleteAppTarget == null;
   const deletingActivePage = deleteTarget?.id === activeId;
   const showApp = sessionsMode && isApp;
   const showPageCapture =
@@ -450,7 +454,7 @@ export default function App() {
           variant={variant}
           onVariant={setVariant}
           inspectorOpen={inspectorOpen}
-          onToggleInspector={() => setInspectorOpen((v) => !v)}
+          onToggleInspector={toggleInspector}
         />
 
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
@@ -562,18 +566,28 @@ export default function App() {
                 <div>点击左侧 Pages 旁的 + 添加一个 URL</div>
               </div>
             )}
-            {showPageCapture && activeSessionMeta && (
-              <div style={{ flex: 1, display: "flex", minHeight: 0, minWidth: 0 }}>
-                <PageBrowser
-                  pageId={activeId}
-                  url={activeSessionMeta.pageUrl}
-                  proxyPort={activeSessionMeta.proxyPort}
-                  visible={sessionsMode && modal == null && deleteTarget == null && deleteAppTarget == null}
-                  inspectorOpen={inspectorOpen}
-                  onToggleInspector={() => setInspectorOpen((v) => !v)}
-                  requestCount={flows.length}
-                />
-                {inspectorOpen && (
+            {Object.keys(sessionMetaByPage).length > 0 && (
+              <div style={{
+                display: "flex",
+                minWidth: 0,
+                position: "relative",
+                ...(showPageCapture
+                  ? { flex: 1, minHeight: 0 }
+                  : { flex: "none" as const, height: 0, overflow: "hidden" as const }),
+              }}>
+                {Object.entries(sessionMetaByPage).map(([pgId, meta]) => (
+                  <PageBrowser
+                    key={pgId}
+                    pageId={pgId}
+                    url={meta.pageUrl}
+                    proxyPort={meta.proxyPort}
+                    active={activeId === pgId && sessionsMode && !isApp && noOverlay}
+                    inspectorOpen={inspectorOpen}
+                    onToggleInspector={toggleInspector}
+                    requestCount={(flowsByPage[pgId] || []).length}
+                  />
+                ))}
+                {inspectorOpen && showPageCapture && (
                 <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
                   {showFlows ? (
                     <FlowTable

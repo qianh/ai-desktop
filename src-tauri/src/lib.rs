@@ -16,7 +16,8 @@ use commands::{
     save_app, save_page, scan_installed_apps, stop_session,
 };
 use page_webview::{
-    close_page_webview, get_page_webview_url, mount_page_webview, sync_page_webview_bounds,
+    close_page_webview, get_page_webview_url, mount_page_webview, set_page_webview_visible,
+    sync_page_webview_bounds,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -44,6 +45,7 @@ pub fn run() {
             mount_page_webview,
             get_page_webview_url,
             close_page_webview,
+            set_page_webview_visible,
             sync_page_webview_bounds,
         ])
         .run(tauri::generate_context!())

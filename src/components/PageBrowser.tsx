@@ -1,11 +1,14 @@
 // Embedded page webview — loads the capture target inside AppScope via a Rust-mounted child webview.
-import { useLayoutEffect, useRef, useState } from "react";
+// Webview is created on mount and closed on unmount. Visibility is toggled via show/hide
+// so switching pages does not reload.
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   closePageWebview,
   formatInvokeError,
   getPageWebviewUrl,
   mountPageWebview,
+  setPageWebviewVisible,
   syncPageWebviewBounds,
 } from "../api";
 import { isTauriRuntime } from "../api";
@@ -14,7 +17,7 @@ type Props = {
   pageId: string;
   url: string;
   proxyPort: number;
-  visible: boolean;
+  active: boolean;
   inspectorOpen: boolean;
   onToggleInspector: () => void;
   requestCount: number;
@@ -60,7 +63,7 @@ export default function PageBrowser({
   pageId,
   url,
   proxyPort,
-  visible,
+  active,
   inspectorOpen,
   onToggleInspector,
   requestCount,
@@ -68,9 +71,13 @@ export default function PageBrowser({
   const hostRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(false);
+  const activeRef = useRef(active);
+  activeRef.current = active;
 
+  // Mount effect — create webview once, close only on component unmount
   useLayoutEffect(() => {
-    if (!visible || !isTauriRuntime() || !hostRef.current) {
+    if (!isTauriRuntime() || !hostRef.current) {
       setStatus("loading");
       setError(null);
       return;
@@ -83,6 +90,7 @@ export default function PageBrowser({
     let pollTimer: number | null = null;
     let cancelled = false;
     let loaded = false;
+    mountedRef.current = false;
 
     const clearLoadTimeout = () => {
       if (loadTimeout != null) {
@@ -112,6 +120,7 @@ export default function PageBrowser({
       clearLoadTimeout();
       clearPollTimer();
       void closePageWebview(pageId);
+      mountedRef.current = false;
       setStatus("error");
       setError(message);
     };
@@ -177,8 +186,16 @@ export default function PageBrowser({
         return;
       }
 
+      mountedRef.current = true;
+
+      if (!activeRef.current) {
+        await setPageWebviewVisible(pageId, false);
+      }
+
       resizeObserver = new ResizeObserver(() => {
-        void syncBounds().catch(() => undefined);
+        if (activeRef.current) {
+          void syncBounds().catch(() => undefined);
+        }
       });
       resizeObserver.observe(host);
 
@@ -197,71 +214,99 @@ export default function PageBrowser({
 
     return () => {
       cancelled = true;
+      mountedRef.current = false;
       clearLoadTimeout();
       clearPollTimer();
       unlistenLoad?.();
       resizeObserver?.disconnect();
       void closePageWebview(pageId);
     };
-  }, [pageId, url, proxyPort, visible]);
+  }, [pageId, url, proxyPort]);
+
+  // Visibility effect — show/hide native webview when active changes
+  useEffect(() => {
+    if (!isTauriRuntime() || !mountedRef.current) return;
+    if (active) {
+      const rect = hostRef.current?.getBoundingClientRect();
+      const sync = rect && rect.width >= 1 && rect.height >= 1
+        ? syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height)
+        : Promise.resolve();
+      void sync.then(() => setPageWebviewVisible(pageId, true)).catch(() => undefined);
+    } else {
+      void setPageWebviewVisible(pageId, false).catch(() => undefined);
+    }
+  }, [pageId, active]);
 
   return (
     <div
-      style={{
-        flex: inspectorOpen ? "0 0 58%" : 1,
-        minWidth: 0,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-        borderRight: inspectorOpen ? "1px solid #ededf0" : "none",
-        background: "#f6f6f8",
-      }}
+      style={
+        active
+          ? {
+              flex: inspectorOpen ? "0 0 58%" : 1,
+              minWidth: 0,
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
+              borderRight: inspectorOpen ? "1px solid #ededf0" : "none",
+              background: "#f6f6f8",
+            }
+          : {
+              position: "absolute",
+              width: 0,
+              height: 0,
+              overflow: "hidden",
+              opacity: 0,
+              pointerEvents: "none",
+            }
+      }
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "6px 10px 6px 12px",
-          borderBottom: "1px solid #ededf0",
-          flex: "none",
-          background: "#fbfbfc",
-        }}
-      >
-        <span
+      {active && (
+        <div
           style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 11.5,
-            color: "#8a8a8e",
-            fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {url}
-        </span>
-        <button
-          onClick={onToggleInspector}
-          title={inspectorOpen ? "收起请求面板" : "展开请求面板"}
-          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "6px 10px 6px 12px",
+            borderBottom: "1px solid #ededf0",
             flex: "none",
-            fontSize: 11,
-            color: "#5a5a5e",
-            background: "#ededf0",
-            border: "0.5px solid #d9d9de",
-            borderRadius: 6,
-            padding: "3px 9px",
-            cursor: "pointer",
-            whiteSpace: "nowrap",
+            background: "#fbfbfc",
           }}
         >
-          {inspectorOpen ? "隐藏请求 ›" : `‹ 请求${requestCount ? ` ${requestCount}` : ""}`}
-        </button>
-      </div>
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 11.5,
+              color: "#8a8a8e",
+              fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            {url}
+          </span>
+          <button
+            onClick={onToggleInspector}
+            title={inspectorOpen ? "收起请求面板" : "展开请求面板"}
+            style={{
+              flex: "none",
+              fontSize: 11,
+              color: "#5a5a5e",
+              background: "#ededf0",
+              border: "0.5px solid #d9d9de",
+              borderRadius: 6,
+              padding: "3px 9px",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {inspectorOpen ? "隐藏请求 ›" : `‹ 请求${requestCount ? ` ${requestCount}` : ""}`}
+          </button>
+        </div>
+      )}
       <div ref={hostRef} style={{ flex: 1, minHeight: 0, position: "relative", background: "#ffffff" }}>
-        {status === "loading" && (
+        {active && status === "loading" && (
           <div
             style={{
               position: "absolute",
@@ -277,7 +322,7 @@ export default function PageBrowser({
             正在加载页面…
           </div>
         )}
-        {status === "error" && (
+        {active && status === "error" && (
           <div
             style={{
               position: "absolute",
