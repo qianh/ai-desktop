@@ -36,6 +36,7 @@ import PageBrowser from "./components/PageBrowser";
 import AppDetail from "./components/AppDetail";
 import CertManager from "./components/CertManager";
 import InterceptPanel from "./components/InterceptPanel";
+import ReportedSessionPanel from "./components/ReportedSessionPanel";
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
 import AddPageModal from "./components/modals/AddPageModal";
 import AddAppModal from "./components/modals/AddAppModal";
@@ -81,6 +82,7 @@ export default function App() {
   const [deleteAppTarget, setDeleteAppTarget] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [interceptsByPage, setInterceptsByPage] = useState<Record<string, InterceptedFetch[]>>({});
+  const [inspectorTab, setInspectorTab] = useState<"flows" | "reported">("flows");
 
   const refreshPages = useCallback(async () => {
     const apiPages = await listPages();
@@ -638,31 +640,67 @@ export default function App() {
                 ))}
                 {inspectorOpen && showPageCapture && (
                 <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
-                  {showFlows ? (
-                    <FlowTable
-                      flows={flows}
-                      variant={variant}
-                      showWaterfall
-                      query={query}
-                      filter={filter}
-                      selectedId={selectedFlowId}
-                      recording={recording}
-                      onSelect={handleSelectFlow}
-                      onQuery={setQuery}
-                      onFilter={setFilter}
-                      onToggleRecord={handleStopRecording}
-                      onClear={clearFlows}
-                    />
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 2,
+                      padding: "4px 8px",
+                      borderBottom: "1px solid #ededf0",
+                      background: "#f6f6f8",
+                      flex: "none",
+                    }}
+                  >
+                    {(["flows", "reported"] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setInspectorTab(tab)}
+                        style={{
+                          fontSize: 11,
+                          fontWeight: inspectorTab === tab ? 600 : 400,
+                          padding: "4px 10px",
+                          borderRadius: 6,
+                          border: "none",
+                          cursor: "pointer",
+                          background: inspectorTab === tab ? "#fff" : "transparent",
+                          color: inspectorTab === tab ? "#1d1d1f" : "#8a8a8e",
+                          boxShadow: inspectorTab === tab ? "0 1px 2px rgba(0,0,0,.06)" : "none",
+                        }}
+                      >
+                        {tab === "flows" ? "Flows" : "上报会话"}
+                      </button>
+                    ))}
+                  </div>
+                  {inspectorTab === "flows" ? (
+                    <>
+                      {showFlows ? (
+                        <FlowTable
+                          flows={flows}
+                          variant={variant}
+                          showWaterfall
+                          query={query}
+                          filter={filter}
+                          selectedId={selectedFlowId}
+                          recording={recording}
+                          onSelect={handleSelectFlow}
+                          onQuery={setQuery}
+                          onFilter={setFilter}
+                          onToggleRecord={handleStopRecording}
+                          onClear={clearFlows}
+                        />
+                      ) : (
+                        <EmptyState busy={captureBusy} />
+                      )}
+                      {(interceptsByPage[activeId]?.length ?? 0) > 0 && (
+                        <div style={{ borderTop: "1px solid #ededf0", maxHeight: "40%", overflow: "auto" }}>
+                          <div style={{ padding: "6px 10px", fontWeight: 600, fontSize: 11, color: "#5a5a5e", background: "#fbfbfc", borderBottom: "1px solid #ededf0" }}>
+                            Intercepted Content ({interceptsByPage[activeId].length})
+                          </div>
+                          <InterceptPanel intercepts={interceptsByPage[activeId]} />
+                        </div>
+                      )}
+                    </>
                   ) : (
-                    <EmptyState busy={captureBusy} />
-                  )}
-                  {(interceptsByPage[activeId]?.length ?? 0) > 0 && (
-                    <div style={{ borderTop: "1px solid #ededf0", maxHeight: "40%", overflow: "auto" }}>
-                      <div style={{ padding: "6px 10px", fontWeight: 600, fontSize: 11, color: "#5a5a5e", background: "#fbfbfc", borderBottom: "1px solid #ededf0" }}>
-                        Intercepted Content ({interceptsByPage[activeId].length})
-                      </div>
-                      <InterceptPanel intercepts={interceptsByPage[activeId]} />
-                    </div>
+                    <ReportedSessionPanel pageId={activeId} />
                   )}
                 </div>
                 )}

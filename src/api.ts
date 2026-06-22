@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppEntry, Flow, FlowType, Header, Page, SessionStatus } from "./types";
+import type { AppEntry, Flow, FlowType, Header, InterceptedFetch, Page, SessionStatus } from "./types";
 import { fmtSize } from "./lib/format";
+import type { SupabaseConfig } from "./lib/supabase";
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -326,5 +327,33 @@ export async function removeCertificate(): Promise<void> {
 
 export async function exportSession(sessionId: string, format: "json" | "har"): Promise<string> {
   return call<string>("export_session", { sessionId, format });
+}
+
+export const REPORTED_INTERCEPTS_LIMIT = 200;
+
+export async function fetchReportedIntercepts(
+  pageId: string,
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<InterceptedFetch[]> {
+  const base = config.url.replace(/\/$/, "");
+  const params = new URLSearchParams({
+    page_id: `eq.${pageId}`,
+    order: "timestamp.desc",
+    limit: String(REPORTED_INTERCEPTS_LIMIT),
+  });
+  const resp = await fetch(`${base}/rest/v1/intercepts?${params}`, {
+    signal,
+    headers: {
+      Accept: "application/json",
+      apikey: config.key,
+      Authorization: `Bearer ${config.key}`,
+    },
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`Supabase ${resp.status}${text ? `: ${text}` : ""}`);
+  }
+  return (await resp.json()) as InterceptedFetch[];
 }
 

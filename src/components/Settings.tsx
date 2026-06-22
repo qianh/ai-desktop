@@ -1,24 +1,15 @@
 // Settings view (§14 of the spec). Toggle state lives in App.
 import { useState } from "react";
 import { ACCENT } from "../lib/ui";
+import {
+  loadSupabaseConfig,
+  saveSupabaseConfig,
+  type SupabaseConfig,
+} from "../lib/supabase";
 
 export type Toggles = { mask: boolean; quic: boolean; login: boolean; autoclean: boolean };
 
-export type SupabaseConfig = { url: string; key: string };
-
-const SUPABASE_STORAGE_KEY = "appscope_supabase_config";
-
-export function loadSupabaseConfig(): SupabaseConfig {
-  try {
-    const raw = localStorage.getItem(SUPABASE_STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return { url: "", key: "" };
-}
-
-export function saveSupabaseConfig(config: SupabaseConfig): void {
-  localStorage.setItem(SUPABASE_STORAGE_KEY, JSON.stringify(config));
-}
+export { loadSupabaseConfig, saveSupabaseConfig, type SupabaseConfig };
 
 type Row =
   | { kind: "toggle"; label: string; desc?: string; key: keyof Toggles }

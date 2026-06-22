@@ -112,6 +112,7 @@ export interface AppEntry {
 
 export interface InterceptedFetch {
   id: string;
+  page_id?: string;
   timestamp: number;
   url: string;
   method: string;
