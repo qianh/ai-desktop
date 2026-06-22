@@ -1,5 +1,6 @@
 // AppScope shell — owns all UI state and routes between views.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { listen as tauriListen } from "@tauri-apps/api/event";
 import {
   generateCertificate,
   getCertificateStatus,
@@ -25,7 +26,7 @@ import {
   type ApiApp,
 } from "./api";
 import { fmtSize } from "./lib/format";
-import type { AppEntry, Flow, Page } from "./types";
+import type { AppEntry, Flow, InterceptedFetch, Page } from "./types";
 import TitleBar from "./components/TitleBar";
 import StatusBar from "./components/StatusBar";
 import Sidebar from "./components/Sidebar";
@@ -34,7 +35,8 @@ import EmptyState from "./components/EmptyState";
 import PageBrowser from "./components/PageBrowser";
 import AppDetail from "./components/AppDetail";
 import CertManager from "./components/CertManager";
-import Settings, { type Toggles } from "./components/Settings";
+import InterceptPanel from "./components/InterceptPanel";
+import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
 import AddPageModal from "./components/modals/AddPageModal";
 import AddAppModal from "./components/modals/AddAppModal";
 import CertGuideModal from "./components/modals/CertGuideModal";
@@ -78,6 +80,7 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [deleteAppTarget, setDeleteAppTarget] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [interceptsByPage, setInterceptsByPage] = useState<Record<string, InterceptedFetch[]>>({});
 
   const refreshPages = useCallback(async () => {
     const apiPages = await listPages();
@@ -234,6 +237,52 @@ export default function App() {
     const flows = items.map(mapFlowListItem);
     setFlowsByPage((prev) => ({ ...prev, [pageId]: flows }));
   };
+
+  const seenInterceptIds = useRef(new Set<string>());
+
+  const handleIntercepts = useCallback((pageId: string, items: InterceptedFetch[]) => {
+    const fresh = items.filter((it) => !seenInterceptIds.current.has(it.id));
+    if (fresh.length === 0) return;
+    for (const it of fresh) seenInterceptIds.current.add(it.id);
+
+    setInterceptsByPage((prev) => ({
+      ...prev,
+      [pageId]: [...(prev[pageId] || []), ...fresh],
+    }));
+
+    const sbConfig = loadSupabaseConfig();
+    if (sbConfig.url && sbConfig.key) {
+      const rows = fresh.map((item) => ({ ...item, page_id: pageId }));
+      fetch(`${sbConfig.url}/rest/v1/intercepts`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: sbConfig.key,
+          Authorization: `Bearer ${sbConfig.key}`,
+          Prefer: "return=minimal",
+        },
+        body: JSON.stringify(rows),
+      })
+        .then((resp) => {
+          if (!resp.ok) resp.text().then((t) => console.error("[appscope][supabase] upload failed:", resp.status, t));
+          else console.log(`[appscope][supabase] uploaded ${rows.length} rows`);
+        })
+        .catch((e) => console.error("[appscope][supabase] fetch error:", e));
+    }
+  }, []);
+
+  useEffect(() => {
+    const unlisten = tauriListen<{ page_id: string; items: InterceptedFetch[] }>(
+      "page-content-intercept",
+      (event) => {
+        const { page_id, items } = event.payload;
+        if (items && items.length > 0) {
+          handleIntercepts(page_id, items);
+        }
+      },
+    );
+    return () => { unlisten.then((fn) => fn()); };
+  }, [handleIntercepts]);
 
   const handleStartCaptureForPage = async (pageId: string) => {
     if (captureBusy || sessionMetaByPage[pageId] || captureInFlight.current.has(pageId)) return;
@@ -606,6 +655,14 @@ export default function App() {
                     />
                   ) : (
                     <EmptyState busy={captureBusy} />
+                  )}
+                  {(interceptsByPage[activeId]?.length ?? 0) > 0 && (
+                    <div style={{ borderTop: "1px solid #ededf0", maxHeight: "40%", overflow: "auto" }}>
+                      <div style={{ padding: "6px 10px", fontWeight: 600, fontSize: 11, color: "#5a5a5e", background: "#fbfbfc", borderBottom: "1px solid #ededf0" }}>
+                        Intercepted Content ({interceptsByPage[activeId].length})
+                      </div>
+                      <InterceptPanel intercepts={interceptsByPage[activeId]} />
+                    </div>
                   )}
                 </div>
                 )}

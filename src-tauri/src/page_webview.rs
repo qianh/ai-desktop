@@ -85,9 +85,11 @@ pub fn mount_page_webview(
     let nav_page_id = page_id.clone();
     let nav_label = label.clone();
 
+    let intercept_script = make_intercept_script(&page_id);
     let builder = WebviewBuilder::new(&label, WebviewUrl::External(target.clone()))
         .proxy_url(proxy)
         .user_agent(PAGE_WEBVIEW_USER_AGENT)
+        .initialization_script(&intercept_script)
         .focused(true)
         .zoom_hotkeys_enabled(true)
         .on_navigation({
@@ -196,6 +198,152 @@ pub fn sync_page_webview_bounds(
     Ok(())
 }
 
+
+fn make_intercept_script(page_id: &str) -> String {
+    format!(
+        r#"
+(function() {{
+    if (window.__APPSCOPE_INTERCEPT_INIT__) return;
+    window.__APPSCOPE_INTERCEPT_INIT__ = true;
+    console.log('[appscope] intercept script injected, page_id=' + '{page_id}');
+
+    var PAGE_ID = '{page_id}';
+    var MAX_BODY_SIZE = 50000;
+    var originalFetch = window.fetch;
+    var pending = [];
+    var drainCount = 0;
+
+    function genId() {{
+        return (typeof crypto !== 'undefined' && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+    }}
+    function truncate(text, limit) {{
+        if (typeof text !== 'string') return text;
+        return text.length > limit ? text.slice(0, limit) + '...[truncated]' : text;
+    }}
+    function headersToObject(headers) {{
+        var obj = {{}};
+        if (headers && typeof headers.forEach === 'function') {{
+            headers.forEach(function(value, key) {{ obj[key] = value; }});
+        }}
+        return obj;
+    }}
+    function safeBodyText(body) {{
+        if (body == null) return null;
+        if (typeof body === 'string') return truncate(body, MAX_BODY_SIZE);
+        try {{ return truncate(JSON.stringify(body), MAX_BODY_SIZE); }}
+        catch(e) {{ return '[unserializable]'; }}
+    }}
+
+    setInterval(function() {{
+        drainCount++;
+        if (drainCount <= 3 || pending.length > 0) {{
+            console.log('[appscope] drain tick #' + drainCount + ', pending=' + pending.length);
+        }}
+        if (pending.length === 0) return;
+        var batch = pending.splice(0);
+        console.log('[appscope] sending ' + batch.length + ' items to appscope.local');
+        originalFetch.call(window, 'https://appscope.local/__intercept__', {{
+            method: 'POST',
+            headers: {{'Content-Type': 'application/json', 'X-Page-Id': PAGE_ID}},
+            body: JSON.stringify(batch),
+        }}).then(function(r) {{
+            console.log('[appscope] drain POST status=' + r.status);
+        }}).catch(function(e) {{
+            console.error('[appscope] drain POST failed:', e);
+        }});
+    }}, 2000);
+
+    window.fetch = async function() {{
+        var args = arguments;
+        var input = args[0];
+        var init = args[1] || {{}};
+        var url = typeof input === 'string' ? input : (input && input.url ? input.url : String(input));
+
+        if (url.indexOf('appscope.local') !== -1) {{
+            return originalFetch.apply(this, args);
+        }}
+
+        if (pending.length < 3) {{
+            console.log('[appscope] intercepted fetch: ' + url.slice(0, 80));
+        }}
+
+        var method = (init.method || (input && input.method) || 'GET').toUpperCase();
+        var startTime = Date.now();
+
+        var reqBody = null;
+        if (init.body != null) {{
+            reqBody = safeBodyText(init.body);
+        }} else if (input && typeof input !== 'string' && input.body) {{
+            try {{
+                var cloned = input.clone();
+                reqBody = truncate(await cloned.text(), MAX_BODY_SIZE);
+            }} catch(e) {{ reqBody = '[unreadable]'; }}
+        }}
+
+        var reqHeaders = {{}};
+        if (init.headers) {{
+            reqHeaders = headersToObject(new Headers(init.headers));
+        }} else if (input && typeof input !== 'string' && input.headers) {{
+            reqHeaders = headersToObject(input.headers);
+        }}
+
+        try {{
+            var response = await originalFetch.apply(this, args);
+            var clone = response.clone();
+            var duration = Date.now() - startTime;
+            var respHeaders = headersToObject(clone.headers);
+            var contentType = (clone.headers.get('content-type') || '').toLowerCase();
+
+            var respBody = null;
+            try {{
+                if (contentType.includes('text/event-stream') || contentType.includes('stream')) {{
+                    var reader = clone.body.getReader();
+                    var decoder = new TextDecoder();
+                    var chunks = '';
+                    while (true) {{
+                        var chunk = await reader.read();
+                        if (chunk.done) break;
+                        chunks += decoder.decode(chunk.value, {{ stream: true }});
+                        if (chunks.length > MAX_BODY_SIZE) {{
+                            chunks = chunks.slice(0, MAX_BODY_SIZE) + '...[truncated]';
+                            break;
+                        }}
+                    }}
+                    respBody = chunks;
+                }} else {{
+                    respBody = truncate(await clone.text(), MAX_BODY_SIZE);
+                }}
+            }} catch(e) {{
+                respBody = '[read error: ' + e.message + ']';
+            }}
+
+            pending.push({{
+                id: genId(), timestamp: startTime, url: url, method: method,
+                req_headers: reqHeaders, req_body: reqBody,
+                status: clone.status, resp_headers: respHeaders,
+                resp_body: respBody, duration_ms: duration
+            }});
+
+            return response;
+        }} catch(err) {{
+            pending.push({{
+                id: genId(), timestamp: startTime, url: url, method: method,
+                req_headers: reqHeaders, req_body: reqBody,
+                status: 0, resp_headers: {{}},
+                resp_body: null, duration_ms: Date.now() - startTime,
+                error: err.message
+            }});
+            throw err;
+        }}
+    }};
+}})();
+"#,
+        page_id = page_id.replace('\'', "\\'")
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::sanitize_webview_label;
@@ -206,5 +354,22 @@ mod tests {
             sanitize_webview_label("e46554d6-7807-4e43-8f12-2f14ac39238f"),
             "page-e46554d6-7807-4e43-8f12-2f14ac39238f"
         );
+    }
+
+    #[test]
+    fn intercept_script_contains_key_parts() {
+        let script = super::make_intercept_script("test-page-id");
+        assert!(script.contains("__APPSCOPE_INTERCEPT_INIT__"));
+        assert!(script.contains("window.fetch"));
+        assert!(script.contains("originalFetch"));
+        assert!(script.contains("appscope.local"));
+        assert!(script.contains("test-page-id"));
+    }
+
+    #[test]
+    fn intercept_script_handles_streaming() {
+        let script = super::make_intercept_script("test");
+        assert!(script.contains("text/event-stream"));
+        assert!(script.contains("getReader"));
     }
 }

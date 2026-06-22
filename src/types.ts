@@ -110,6 +110,20 @@ export interface AppEntry {
   color: string;
 }
 
+export interface InterceptedFetch {
+  id: string;
+  timestamp: number;
+  url: string;
+  method: string;
+  req_headers: Record<string, string>;
+  req_body: string | null;
+  status: number;
+  resp_headers: Record<string, string>;
+  resp_body: string | null;
+  duration_ms: number;
+  error?: string;
+}
+
 export interface AppData {
   defaultSel: string;
   pages: Page[];

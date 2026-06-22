@@ -5,6 +5,7 @@ use crate::store::FlowStore;
 use chrono::Utc;
 use serde::Deserialize;
 use std::io::{BufRead, BufReader, Write};
+use tauri::{AppHandle, Emitter};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -221,6 +222,7 @@ pub fn sync_event_file(
     store: &FlowStore,
     session_id: &str,
     event_file: &Path,
+    app: Option<&AppHandle>,
 ) -> Result<usize, String> {
     if !event_file.exists() {
         return Ok(0);
@@ -236,6 +238,27 @@ pub fn sync_event_file(
         if trimmed.is_empty() {
             continue;
         }
+
+        let raw: serde_json::Value = serde_json::from_str(trimmed)
+            .map_err(|e| format!("invalid event json: {e}"))?;
+
+        if raw.get("_type").and_then(|v| v.as_str()) == Some("js_intercept") {
+            if let Some(app) = app {
+                let page_id = raw.get("page_id").and_then(|v| v.as_str()).unwrap_or("");
+                let items_json = raw.get("items_json").and_then(|v| v.as_str()).unwrap_or("[]");
+                if let Ok(items) = serde_json::from_str::<Vec<serde_json::Value>>(items_json) {
+                    if !items.is_empty() {
+                        let _ = app.emit("page-content-intercept", serde_json::json!({
+                            "page_id": page_id,
+                            "items": items,
+                        }));
+                    }
+                }
+            }
+            count += 1;
+            continue;
+        }
+
         let event = parse_flow_event_json(trimmed)?;
         let flow = flow_event_to_flow(&event, session_id);
         store.insert_flow(&flow)?;
@@ -288,13 +311,39 @@ def _header_pairs(headers):
         pairs.append({"name": name, "value": value, "sensitive": sensitive})
     return pairs
 
+def request(flow: http.HTTPFlow):
+    if flow.request.pretty_host == "appscope.local":
+        if flow.request.method == "OPTIONS":
+            flow.response = http.Response.make(204, b"", {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type, X-Page-Id",
+                "Access-Control-Max-Age": "86400",
+            })
+            return
+        if EVENT_FILE and flow.request.method == "POST":
+            body = flow.request.get_text(strict=False) or "[]"
+            page_id = flow.request.headers.get("x-page-id", "")
+            event = {"_type": "js_intercept", "page_id": page_id, "items_json": body}
+            with open(EVENT_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(event) + "\n")
+        flow.response = http.Response.make(200, b'{"ok":true}', {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+        })
+
 def response(flow: http.HTTPFlow):
     if not EVENT_FILE:
+        return
+    if flow.request.pretty_host == "appscope.local":
         return
     req = flow.request
     resp = flow.response
     if resp is None:
         return
+    for csp_header in ("content-security-policy", "content-security-policy-report-only"):
+        if csp_header in resp.headers:
+            del resp.headers[csp_header]
     event_id = hashlib.sha256(
         f"{req.timestamp_start}:{req.method}:{req.pretty_url}:{resp.status_code}".encode()
     ).hexdigest()[:16]
@@ -376,8 +425,8 @@ mod tests {
         let line = r#"{"id":"flow-stable-1","method":"GET","url":"http://127.0.0.1:8080/","scheme":"http","host":"127.0.0.1","path":"/","status_code":200,"req_headers":[],"resp_headers":[]}"#;
         std::fs::write(&event_file, format!("{line}\n")).unwrap();
 
-        sync_event_file(&store, session_id, &event_file).unwrap();
-        sync_event_file(&store, session_id, &event_file).unwrap();
+        sync_event_file(&store, session_id, &event_file, None).unwrap();
+        sync_event_file(&store, session_id, &event_file, None).unwrap();
         let flows = store.list_flows(session_id).unwrap();
         assert_eq!(flows.len(), 1);
         assert_eq!(flows[0].id, "flow-stable-1");
@@ -409,7 +458,7 @@ mod tests {
         let line = r#"{"method":"GET","url":"http://127.0.0.1:8080/","scheme":"http","host":"127.0.0.1","path":"/","status_code":200,"req_headers":[],"resp_headers":[],"resp_body_preview":"ok"}"#;
         std::fs::write(&event_file, format!("{line}\n")).unwrap();
 
-        let count = sync_event_file(&store, session_id, &event_file).unwrap();
+        let count = sync_event_file(&store, session_id, &event_file, None).unwrap();
         assert_eq!(count, 1);
         let flows = store.list_flows(session_id).unwrap();
         assert_eq!(flows.len(), 1);

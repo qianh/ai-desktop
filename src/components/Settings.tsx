@@ -1,7 +1,24 @@
 // Settings view (§14 of the spec). Toggle state lives in App.
+import { useState } from "react";
 import { ACCENT } from "../lib/ui";
 
 export type Toggles = { mask: boolean; quic: boolean; login: boolean; autoclean: boolean };
+
+export type SupabaseConfig = { url: string; key: string };
+
+const SUPABASE_STORAGE_KEY = "appscope_supabase_config";
+
+export function loadSupabaseConfig(): SupabaseConfig {
+  try {
+    const raw = localStorage.getItem(SUPABASE_STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return { url: "", key: "" };
+}
+
+export function saveSupabaseConfig(config: SupabaseConfig): void {
+  localStorage.setItem(SUPABASE_STORAGE_KEY, JSON.stringify(config));
+}
 
 type Row =
   | { kind: "toggle"; label: string; desc?: string; key: keyof Toggles }
@@ -70,6 +87,26 @@ function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
 }
 
 export default function Settings({ toggles, onToggle }: { toggles: Toggles; onToggle: (k: keyof Toggles) => void }) {
+  const [sbConfig, setSbConfig] = useState<SupabaseConfig>(loadSupabaseConfig);
+
+  const updateSupabase = (field: keyof SupabaseConfig, value: string) => {
+    const next = { ...sbConfig, [field]: value };
+    setSbConfig(next);
+    saveSupabaseConfig(next);
+  };
+
+  const inputStyle: React.CSSProperties = {
+    flex: 1,
+    minWidth: 0,
+    font: "12px ui-monospace,Menlo,monospace",
+    color: "#1d1d1f",
+    background: "#f9f9fb",
+    border: "1px solid #e0e0e4",
+    borderRadius: 6,
+    padding: "6px 9px",
+    outline: "none",
+  };
+
   return (
     <div style={{ flex: 1, overflow: "auto", minHeight: 0, padding: "28px 36px" }}>
       <div style={{ maxWidth: 620, margin: "0 auto" }}>
@@ -98,6 +135,41 @@ export default function Settings({ toggles, onToggle }: { toggles: Toggles; onTo
             </div>
           </div>
         ))}
+
+        <div style={{ marginBottom: 26 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#9a9aa0", letterSpacing: ".05em", textTransform: "uppercase", marginBottom: 8 }}>
+            Cloud Sync (Supabase)
+          </div>
+          <div style={{ border: "1px solid #e6e6ea", borderRadius: 11, overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 15px", borderBottom: "1px solid #f1f1f3" }}>
+              <div style={{ minWidth: 80 }}>
+                <div style={{ fontSize: 13, color: "#1d1d1f" }}>URL</div>
+              </div>
+              <input
+                type="text"
+                placeholder="https://xxx.supabase.co"
+                value={sbConfig.url}
+                onChange={(e) => updateSupabase("url", e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 15px", borderBottom: "1px solid #f1f1f3" }}>
+              <div style={{ minWidth: 80 }}>
+                <div style={{ fontSize: 13, color: "#1d1d1f" }}>API Key</div>
+              </div>
+              <input
+                type="password"
+                placeholder="eyJ..."
+                value={sbConfig.key}
+                onChange={(e) => updateSupabase("key", e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ padding: "8px 15px", fontSize: 11, color: "#9a9aa0" }}>
+              {sbConfig.url && sbConfig.key ? "✓ 已配置 — 拦截数据将自动上传" : "未配置 — 拦截数据仅本地展示"}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -164,7 +164,7 @@ pub fn remove_page(page_id: String) -> Result<(), String> {
         for session_id in session_ids {
             if let Some(proxy) = state.proxies.remove(&session_id) {
                 let event_file = proxy.event_file.clone();
-                let _ = sync_event_file(&state.store, &session_id, &event_file);
+                let _ = sync_event_file(&state.store, &session_id, &event_file, None);
                 proxy.stop();
             }
         }
@@ -265,7 +265,7 @@ pub fn open_page_with_capture_core(page_id: &str) -> Result<SessionInfo, String>
 
         // Best-effort initial sync after short delay for first navigation.
         std::thread::sleep(std::time::Duration::from_millis(300));
-        let _ = sync_event_file(&state.store, &session_id, &event_file);
+        let _ = sync_event_file(&state.store, &session_id, &event_file, None);
 
         Ok(SessionInfo {
             id: session_id,
@@ -282,7 +282,7 @@ pub fn stop_session(session_id: String) -> Result<(), String> {
     with_state(|state| {
         if let Some(proxy) = state.proxies.remove(&session_id) {
             let event_file = proxy.event_file.clone();
-            let _ = sync_event_file(&state.store, &session_id, &event_file);
+            let _ = sync_event_file(&state.store, &session_id, &event_file, None);
             proxy.stop();
         }
         if let Some(mut session) = state.store.get_session(&session_id)? {
@@ -296,10 +296,10 @@ pub fn stop_session(session_id: String) -> Result<(), String> {
 
 /// §13.4 — list captured flows for a session.
 #[tauri::command]
-pub fn list_flows(session_id: String) -> Result<Vec<serde_json::Value>, String> {
+pub fn list_flows(app: tauri::AppHandle, session_id: String) -> Result<Vec<serde_json::Value>, String> {
     with_state(|state| {
         if let Some(proxy) = state.proxies.get(&session_id) {
-            let _ = sync_event_file(&state.store, &session_id, &proxy.event_file);
+            let _ = sync_event_file(&state.store, &session_id, &proxy.event_file, Some(&app));
         }
         let flows = state.store.list_flows(&session_id)?;
         flows

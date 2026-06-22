@@ -327,3 +327,4 @@ export async function removeCertificate(): Promise<void> {
 export async function exportSession(sessionId: string, format: "json" | "har"): Promise<string> {
   return call<string>("export_session", { sessionId, format });
 }
+
