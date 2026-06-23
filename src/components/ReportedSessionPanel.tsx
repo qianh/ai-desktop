@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchReportedIntercepts, REPORTED_INTERCEPTS_LIMIT } from "../api";
+import { formatTimestamp } from "../lib/format";
 import { loadSupabaseConfig } from "../lib/supabase";
 import { truncateBody } from "../lib/truncate";
 import type { InterceptedFetch } from "../types";
@@ -8,10 +9,6 @@ import { ACCENT } from "../lib/ui";
 type Props = {
   pageId: string;
 };
-
-function formatTimestamp(ms: number): string {
-  return new Date(ms).toLocaleString();
-}
 
 function truncateUrl(url: string, max = 60): string {
   return url.length > max ? url.slice(0, max) + "…" : url;

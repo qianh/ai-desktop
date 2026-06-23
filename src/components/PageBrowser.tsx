@@ -71,7 +71,7 @@ export default function PageBrowser({
   const hostRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
-  const mountedRef = useRef(false);
+  const [mounted, setMounted] = useState(false);
   const activeRef = useRef(active);
   activeRef.current = active;
 
@@ -90,7 +90,8 @@ export default function PageBrowser({
     let pollTimer: number | null = null;
     let cancelled = false;
     let loaded = false;
-    mountedRef.current = false;
+    let webviewMounted = false;
+    setMounted(false);
 
     const clearLoadTimeout = () => {
       if (loadTimeout != null) {
@@ -120,7 +121,8 @@ export default function PageBrowser({
       clearLoadTimeout();
       clearPollTimer();
       void closePageWebview(pageId);
-      mountedRef.current = false;
+      webviewMounted = false;
+      setMounted(false);
       setStatus("error");
       setError(message);
     };
@@ -152,11 +154,8 @@ export default function PageBrowser({
       }
     };
 
-    const mount = async () => {
-      setStatus("loading");
-      setError(null);
-      loaded = false;
-
+    const ensureListener = async () => {
+      if (unlistenLoad) return;
       unlistenLoad = await listen<PageWebviewLoadEvent>("page-webview-load", (event) => {
         const payload = event.payload;
         if (cancelled || payload.page_id !== pageId) return;
@@ -170,15 +169,20 @@ export default function PageBrowser({
 
         markReady();
       });
+    };
 
-      if (cancelled) {
-        unlistenLoad();
-        unlistenLoad = null;
-        return;
-      }
+    const createWebview = async () => {
+      if (webviewMounted || cancelled) return;
 
-      const rect = await waitForHostSize(host);
-      if (!rect || cancelled) return;
+      const rect = host.getBoundingClientRect();
+      if (rect.width < 80 || rect.height < 120) return;
+
+      await ensureListener();
+      if (cancelled) return;
+
+      setStatus("loading");
+      setError(null);
+      loaded = false;
 
       await mountPageWebview(pageId, url, proxyPort, rect.x, rect.y, rect.width, rect.height);
       if (cancelled) {
@@ -186,27 +190,54 @@ export default function PageBrowser({
         return;
       }
 
-      mountedRef.current = true;
+      webviewMounted = true;
+      setMounted(true);
 
-      if (!activeRef.current) {
+      if (activeRef.current) {
+        await syncBounds();
+        await setPageWebviewVisible(pageId, true);
+      } else {
         await setPageWebviewVisible(pageId, false);
       }
 
-      resizeObserver = new ResizeObserver(() => {
-        if (activeRef.current) {
-          void syncBounds().catch(() => undefined);
-        }
-      });
-      resizeObserver.observe(host);
-
       scheduleLoadTimeout();
-      pollTimer = window.setInterval(() => {
-        void pollWebviewUrl();
-      }, URL_POLL_INTERVAL_MS);
+      if (!pollTimer) {
+        pollTimer = window.setInterval(() => {
+          void pollWebviewUrl();
+        }, URL_POLL_INTERVAL_MS);
+      }
       void pollWebviewUrl();
     };
 
-    void mount().catch((e) => {
+    const boot = async () => {
+      await ensureListener();
+      if (cancelled) return;
+
+      const rect = await waitForHostSize(host);
+      if (!rect || cancelled) {
+        setStatus("error");
+        setError("页面容器尺寸为 0，无法挂载 WebView。请展开窗口或点击左侧「上报会话」查看历史上报。");
+        return;
+      }
+
+      await createWebview();
+    };
+
+    resizeObserver = new ResizeObserver(() => {
+      if (activeRef.current) {
+        void syncBounds().catch(() => undefined);
+      }
+      if (!webviewMounted) {
+        void createWebview().catch((e) => {
+          console.error(e);
+          setStatus("error");
+          setError(formatInvokeError(e));
+        });
+      }
+    });
+    resizeObserver.observe(host);
+
+    void boot().catch((e) => {
       console.error(e);
       setStatus("error");
       setError(formatInvokeError(e));
@@ -214,7 +245,8 @@ export default function PageBrowser({
 
     return () => {
       cancelled = true;
-      mountedRef.current = false;
+      webviewMounted = false;
+      setMounted(false);
       clearLoadTimeout();
       clearPollTimer();
       unlistenLoad?.();
@@ -225,17 +257,37 @@ export default function PageBrowser({
 
   // Visibility effect — show/hide native webview when active changes
   useEffect(() => {
-    if (!isTauriRuntime() || !mountedRef.current) return;
+    if (!isTauriRuntime() || !mounted) return;
     if (active) {
-      const rect = hostRef.current?.getBoundingClientRect();
-      const sync = rect && rect.width >= 1 && rect.height >= 1
-        ? syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height)
-        : Promise.resolve();
-      void sync.then(() => setPageWebviewVisible(pageId, true)).catch(() => undefined);
+      const show = async () => {
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
+        const rect = hostRef.current?.getBoundingClientRect();
+        if (rect && rect.width >= 1 && rect.height >= 1) {
+          await syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height);
+        }
+        await setPageWebviewVisible(pageId, true);
+      };
+      void show().catch(() => undefined);
     } else {
       void setPageWebviewVisible(pageId, false).catch(() => undefined);
     }
-  }, [pageId, active]);
+  }, [pageId, active, mounted]);
+
+  // Re-sync bounds when inspector panel toggles (layout width changes)
+  useEffect(() => {
+    if (!isTauriRuntime() || !mounted || !active) return;
+    const timer = window.setTimeout(() => {
+      const rect = hostRef.current?.getBoundingClientRect();
+      if (rect && rect.width >= 1 && rect.height >= 1) {
+        void syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height).catch(
+          () => undefined,
+        );
+      }
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [pageId, active, mounted, inspectorOpen]);
 
   return (
     <div

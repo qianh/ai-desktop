@@ -58,3 +58,7 @@ export function catColor(c: string): string {
     } as Record<string, string>)[c] || "#8a8a8e"
   );
 }
+
+export function formatTimestamp(ms: number): string {
+  return new Date(ms).toLocaleString();
+}

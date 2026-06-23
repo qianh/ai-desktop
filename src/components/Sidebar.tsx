@@ -122,6 +122,8 @@ type Props = {
   onAddApp: () => void;
   onCerts: () => void;
   onSettings: () => void;
+  onOpenSessionRecords: () => void;
+  sessionRecordsActive: boolean;
 };
 
 export default function Sidebar(p: Props) {
@@ -155,9 +157,16 @@ export default function Sidebar(p: Props) {
         <button
           onClick={p.onSelectAll}
           title="All Sessions"
-          style={{ ...collapseToggle, background: sessionsMode ? ACCENT + "1f" : "none" }}
+          style={{ ...collapseToggle, background: sessionsMode && p.activeId === "acme" ? ACCENT + "1f" : "none" }}
         >
           ≣
+        </button>
+        <button
+          onClick={p.onOpenSessionRecords}
+          title="会话记录"
+          style={{ ...collapseToggle, background: p.sessionRecordsActive ? ACCENT + "1f" : "none" }}
+        >
+          💬
         </button>
         {p.pages.map((pg) => (
           <button
@@ -218,6 +227,10 @@ export default function Sidebar(p: Props) {
           <span style={{ width: 18, textAlign: "center", fontSize: 13 }}>≣</span>
           <span style={{ flex: 1, textAlign: "left" }}>All Sessions</span>
           <span style={{ font: "11px ui-monospace,Menlo,monospace", color: "#a0a0a6" }}>{p.totalCount}</span>
+        </button>
+        <button onClick={p.onOpenSessionRecords} style={navSel(p.sessionRecordsActive)}>
+          <span style={{ width: 18, textAlign: "center", fontSize: 13 }}>💬</span>
+          <span style={{ flex: 1, textAlign: "left" }}>会话记录</span>
         </button>
 
         <div style={sectionHeader}>

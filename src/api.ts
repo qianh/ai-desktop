@@ -1,5 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppEntry, Flow, FlowType, Header, InterceptedFetch, Page, SessionStatus } from "./types";
+import { isConversationIntercept, conversationPreview } from "./lib/conversationFilter";
+import type {
+  AppEntry,
+  Flow,
+  FlowType,
+  Header,
+  InterceptedFetch,
+  Page,
+  SessionRecordSummary,
+  SessionStatus,
+} from "./types";
 import { fmtSize } from "./lib/format";
 import type { SupabaseConfig } from "./lib/supabase";
 
@@ -355,5 +365,50 @@ export async function fetchReportedIntercepts(
     throw new Error(`Supabase ${resp.status}${text ? `: ${text}` : ""}`);
   }
   return (await resp.json()) as InterceptedFetch[];
+}
+
+export async function fetchConversationIntercepts(
+  pageId: string,
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<InterceptedFetch[]> {
+  const rows = await fetchReportedIntercepts(pageId, config, signal);
+  return rows.filter(isConversationIntercept);
+}
+
+export async function fetchSessionRecordSummaries(
+  pages: Page[],
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<SessionRecordSummary[]> {
+  const results = await Promise.all(
+    pages.map(async (page) => {
+      const base = {
+        pageId: page.id,
+        pageName: page.name,
+        pageHost: page.host,
+        letter: page.letter,
+        color: page.color,
+      };
+      try {
+        const rows = await fetchConversationIntercepts(page.id, config, signal);
+        const latest = rows[0];
+        return {
+          ...base,
+          recordCount: rows.length,
+          lastTimestamp: latest?.timestamp ?? null,
+          preview: latest ? conversationPreview(latest) : null,
+        } satisfies SessionRecordSummary;
+      } catch {
+        return {
+          ...base,
+          recordCount: 0,
+          lastTimestamp: null,
+          preview: null,
+        } satisfies SessionRecordSummary;
+      }
+    }),
+  );
+  return results.sort((a, b) => (b.lastTimestamp ?? 0) - (a.lastTimestamp ?? 0));
 }
 

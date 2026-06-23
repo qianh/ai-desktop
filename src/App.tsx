@@ -36,7 +36,7 @@ import PageBrowser from "./components/PageBrowser";
 import AppDetail from "./components/AppDetail";
 import CertManager from "./components/CertManager";
 import InterceptPanel from "./components/InterceptPanel";
-import ReportedSessionPanel from "./components/ReportedSessionPanel";
+import SessionRecordsView from "./components/SessionRecordsView";
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
 import AddPageModal from "./components/modals/AddPageModal";
 import AddAppModal from "./components/modals/AddAppModal";
@@ -44,7 +44,7 @@ import CertGuideModal from "./components/modals/CertGuideModal";
 import DeletePageModal from "./components/modals/DeletePageModal";
 import DeleteAppModal from "./components/modals/DeleteAppModal";
 
-type NavMode = "sessions" | "certs" | "settings";
+type NavMode = "sessions" | "records" | "certs" | "settings";
 type ModalKind = null | "addPage" | "addApp" | "certGuide";
 
 type PageSessionMeta = {
@@ -82,7 +82,7 @@ export default function App() {
   const [deleteAppTarget, setDeleteAppTarget] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [interceptsByPage, setInterceptsByPage] = useState<Record<string, InterceptedFetch[]>>({});
-  const [inspectorTab, setInspectorTab] = useState<"flows" | "reported">("flows");
+  const [recordsPageId, setRecordsPageId] = useState<string | null>(null);
 
   const refreshPages = useCallback(async () => {
     const apiPages = await listPages();
@@ -172,23 +172,57 @@ export default function App() {
     return f[0].id;
   };
 
+  const restorePageWebview = useCallback(async (pageId: string) => {
+    if (!sessionMetaByPage[pageId]) return;
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+    await setPageWebviewVisible(pageId, true).catch(() => undefined);
+  }, [sessionMetaByPage]);
+
   const selectSession = (id: string) => {
     const app = isAppId(id);
     setNavMode("sessions");
     setActiveId(id);
-    if (!app) setSelectedFlowId(firstId(id));
+    if (!app) {
+      setSelectedFlowId(firstId(id));
+      if (sessionMetaByPage[id]) {
+        void restorePageWebview(id);
+      }
+    }
+  };
+
+  const handleOpenSessionRecords = () => {
+    setNavMode("records");
+    const pageId =
+      activeId && !isAppId(activeId) ? activeId : pages[0]?.id ?? null;
+    setRecordsPageId(pageId);
+    void Promise.all(
+      Object.keys(sessionMetaByPage).map((id) =>
+        setPageWebviewVisible(id, false).catch(() => undefined),
+      ),
+    );
   };
 
   const active = find(activeId);
   const isApp = isAppId(activeId);
   const sessionsMode = navMode === "sessions";
+  const recordsMode = navMode === "records";
   const flows = activeFlows();
 
   const totalCount = String(
     pages.reduce((a, p) => a + (clear[p.id] ? 0 : (flowsByPage[p.id] || p.flows).length), 0)
   );
   const titleSuffix =
-    navMode === "certs" ? "Certificates" : navMode === "settings" ? "Settings" : active ? active.name : "AppScope";
+    navMode === "certs"
+      ? "Certificates"
+      : navMode === "settings"
+      ? "Settings"
+      : recordsMode
+      ? "会话记录"
+      : active
+      ? active.name
+      : "AppScope";
 
   const done = flows.filter((f) => f.status != null);
   const xfer = done.reduce((a, f) => a + (f.size || 0), 0);
@@ -479,6 +513,11 @@ export default function App() {
     void handleStartCaptureForPage(activeId);
   }, [activeId, activeSessionMeta, captureBusy, isApp, loading, sessionsMode]);
 
+  useEffect(() => {
+    if (!sessionsMode || isApp || !activeId || !sessionMetaByPage[activeId]) return;
+    void restorePageWebview(activeId);
+  }, [activeId, isApp, restorePageWebview, sessionMetaByPage, sessionsMode]);
+
   return (
     <div
       style={{
@@ -519,8 +558,14 @@ export default function App() {
             collapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
             onQuery={setQuery}
-            onSelectAll={() => pages[0] && selectSession(pages[0].id)}
+            onSelectAll={() => {
+              setNavMode("sessions");
+              setActiveId("acme");
+              setInspectorOpen(true);
+            }}
             onSelect={selectSession}
+            onOpenSessionRecords={handleOpenSessionRecords}
+            sessionRecordsActive={recordsMode}
             onDeletePage={handleDeletePage}
             onDeleteApp={handleDeleteApp}
             onAddPage={() => setModal("addPage")}
@@ -570,6 +615,13 @@ export default function App() {
               />
             )}
             {navMode === "settings" && <Settings toggles={toggles} onToggle={toggle} />}
+            {recordsMode && (
+              <SessionRecordsView
+                pages={enrichedPages}
+                selectedPageId={recordsPageId}
+                onSelectPage={setRecordsPageId}
+              />
+            )}
             {showApp && active && "bundle" in active && (
               <AppDetail
                 app={active}
@@ -617,7 +669,7 @@ export default function App() {
                 <div>点击左侧 Pages 旁的 + 添加一个 URL</div>
               </div>
             )}
-            {Object.keys(sessionMetaByPage).length > 0 && (
+            {sessionsMode && Object.keys(sessionMetaByPage).length > 0 && (
               <div style={{
                 display: "flex",
                 minWidth: 0,
@@ -628,7 +680,7 @@ export default function App() {
               }}>
                 {Object.entries(sessionMetaByPage).map(([pgId, meta]) => (
                   <PageBrowser
-                    key={pgId}
+                    key={`${pgId}-${meta.proxyPort}`}
                     pageId={pgId}
                     url={meta.pageUrl}
                     proxyPort={meta.proxyPort}
@@ -640,67 +692,31 @@ export default function App() {
                 ))}
                 {inspectorOpen && showPageCapture && (
                 <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 2,
-                      padding: "4px 8px",
-                      borderBottom: "1px solid #ededf0",
-                      background: "#f6f6f8",
-                      flex: "none",
-                    }}
-                  >
-                    {(["flows", "reported"] as const).map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => setInspectorTab(tab)}
-                        style={{
-                          fontSize: 11,
-                          fontWeight: inspectorTab === tab ? 600 : 400,
-                          padding: "4px 10px",
-                          borderRadius: 6,
-                          border: "none",
-                          cursor: "pointer",
-                          background: inspectorTab === tab ? "#fff" : "transparent",
-                          color: inspectorTab === tab ? "#1d1d1f" : "#8a8a8e",
-                          boxShadow: inspectorTab === tab ? "0 1px 2px rgba(0,0,0,.06)" : "none",
-                        }}
-                      >
-                        {tab === "flows" ? "Flows" : "上报会话"}
-                      </button>
-                    ))}
-                  </div>
-                  {inspectorTab === "flows" ? (
-                    <>
-                      {showFlows ? (
-                        <FlowTable
-                          flows={flows}
-                          variant={variant}
-                          showWaterfall
-                          query={query}
-                          filter={filter}
-                          selectedId={selectedFlowId}
-                          recording={recording}
-                          onSelect={handleSelectFlow}
-                          onQuery={setQuery}
-                          onFilter={setFilter}
-                          onToggleRecord={handleStopRecording}
-                          onClear={clearFlows}
-                        />
-                      ) : (
-                        <EmptyState busy={captureBusy} />
-                      )}
-                      {(interceptsByPage[activeId]?.length ?? 0) > 0 && (
-                        <div style={{ borderTop: "1px solid #ededf0", maxHeight: "40%", overflow: "auto" }}>
-                          <div style={{ padding: "6px 10px", fontWeight: 600, fontSize: 11, color: "#5a5a5e", background: "#fbfbfc", borderBottom: "1px solid #ededf0" }}>
-                            Intercepted Content ({interceptsByPage[activeId].length})
-                          </div>
-                          <InterceptPanel intercepts={interceptsByPage[activeId]} />
-                        </div>
-                      )}
-                    </>
+                  {showFlows ? (
+                    <FlowTable
+                      flows={flows}
+                      variant={variant}
+                      showWaterfall
+                      query={query}
+                      filter={filter}
+                      selectedId={selectedFlowId}
+                      recording={recording}
+                      onSelect={handleSelectFlow}
+                      onQuery={setQuery}
+                      onFilter={setFilter}
+                      onToggleRecord={handleStopRecording}
+                      onClear={clearFlows}
+                    />
                   ) : (
-                    <ReportedSessionPanel pageId={activeId} />
+                    <EmptyState busy={captureBusy} />
+                  )}
+                  {(interceptsByPage[activeId]?.length ?? 0) > 0 && (
+                    <div style={{ borderTop: "1px solid #ededf0", maxHeight: "40%", overflow: "auto" }}>
+                      <div style={{ padding: "6px 10px", fontWeight: 600, fontSize: 11, color: "#5a5a5e", background: "#fbfbfc", borderBottom: "1px solid #ededf0" }}>
+                        Intercepted Content ({interceptsByPage[activeId].length})
+                      </div>
+                      <InterceptPanel intercepts={interceptsByPage[activeId]} />
+                    </div>
                   )}
                 </div>
                 )}

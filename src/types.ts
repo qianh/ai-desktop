@@ -130,3 +130,14 @@ export interface AppData {
   pages: Page[];
   apps: AppEntry[];
 }
+
+export interface SessionRecordSummary {
+  pageId: string;
+  pageName: string;
+  pageHost: string;
+  letter: string;
+  color: string;
+  recordCount: number;
+  lastTimestamp: number | null;
+  preview: string | null;
+}
