@@ -79,6 +79,9 @@ export default function SessionsWorkspace(p: Props) {
     onClear: p.onClearFlows,
   };
 
+  const isInterceptReportingEnabled = (id: string) =>
+    p.pages.find((pg) => pg.id === id)?.interceptReportingEnabled ?? false;
+
   return (
     <div style={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column" }}>
       {Object.keys(p.sessionMetaByPage).length > 0 && (
@@ -92,8 +95,7 @@ export default function SessionsWorkspace(p: Props) {
           }}
         >
           {Object.entries(p.sessionMetaByPage).map(([pageId, meta]) => {
-            const interceptReportingEnabled =
-              p.pages.find((pg) => pg.id === pageId)?.interceptReportingEnabled ?? false;
+            const interceptReportingEnabled = isInterceptReportingEnabled(pageId);
             return (
             <PageBrowser
               key={`${pageId}-${meta.proxyPort}`}
@@ -123,7 +125,7 @@ export default function SessionsWorkspace(p: Props) {
               ) : (
                 <EmptyState busy={p.captureBusy} />
               )}
-              {(p.pages.find((pg) => pg.id === p.activeId)?.interceptReportingEnabled ?? false) &&
+              {isInterceptReportingEnabled(p.activeId) &&
                 (p.interceptsByPage[p.activeId]?.length ?? 0) > 0 && (
                 <div style={{ borderTop: "1px solid #ededf0", maxHeight: "40%", overflow: "auto" }}>
                   <div

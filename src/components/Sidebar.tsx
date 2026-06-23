@@ -117,42 +117,29 @@ type ReportingToggleProps = {
 
 function ReportingToggle({ pageId, enabled, compact, onToggle }: ReportingToggleProps) {
   const tip = reportingTip(enabled);
-  const btnStyle: CSSProperties = compact
-    ? {
-        appearance: "none",
-        border: "none",
-        background: enabled ? "rgba(0, 122, 255, 0.12)" : "transparent",
-        cursor: "pointer",
-        width: 18,
-        height: 14,
-        borderRadius: 4,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 9,
-        lineHeight: 1,
-        color: enabled ? ACCENT : "#8e8e93",
-        padding: 0,
-      }
-    : {
-        appearance: "none",
-        border: "none",
-        background: enabled ? "rgba(0, 122, 255, 0.1)" : "transparent",
-        cursor: "pointer",
-        flex: "none",
-        width: 22,
-        height: 22,
-        borderRadius: 6,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: 13,
-        lineHeight: 1,
-        color: enabled ? ACCENT : "#8e8e93",
-        position: "relative",
-        zIndex: 2,
-        transition: "background 0.12s ease, color 0.12s ease",
-      };
+  const btnStyle: CSSProperties = {
+    appearance: "none",
+    border: "none",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    lineHeight: 1,
+    color: enabled ? ACCENT : "#8e8e93",
+    background: enabled ? (compact ? "rgba(0, 122, 255, 0.12)" : "rgba(0, 122, 255, 0.1)") : "transparent",
+    ...(compact
+      ? { width: 18, height: 14, borderRadius: 4, fontSize: 9, padding: 0 }
+      : {
+          flex: "none",
+          width: 22,
+          height: 22,
+          borderRadius: 6,
+          fontSize: 13,
+          position: "relative",
+          zIndex: 2,
+          transition: "background 0.12s ease, color 0.12s ease",
+        }),
+  };
 
   return (
     <span className="asc-hover-tip">

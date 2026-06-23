@@ -57,7 +57,7 @@ pub fn mount_page_webview(
     page_id: String,
     url: String,
     proxy_port: u16,
-    _intercept_reporting_enabled: bool,
+    intercept_reporting_enabled: bool,
     x: f64,
     y: f64,
     width: f64,
@@ -85,9 +85,6 @@ pub fn mount_page_webview(
     let nav_app = app.clone();
     let nav_page_id = page_id.clone();
     let nav_label = label.clone();
-
-    let intercept_reporting_enabled =
-        crate::commands::lookup_page_intercept_reporting(&page_id)?;
 
     let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(target.clone()))
         .proxy_url(proxy)

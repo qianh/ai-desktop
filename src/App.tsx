@@ -253,9 +253,11 @@ export default function App() {
 
   const seenInterceptIds = useRef(new Set<string>());
   const pagesById = useMemo(() => Object.fromEntries(pages.map((p) => [p.id, p])), [pages]);
+  const pagesByIdRef = useRef(pagesById);
+  pagesByIdRef.current = pagesById;
 
   const handleIntercepts = useCallback((pageId: string, items: InterceptedFetch[]) => {
-    if (!pagesById[pageId]?.interceptReportingEnabled) return;
+    if (!pagesByIdRef.current[pageId]?.interceptReportingEnabled) return;
 
     const fresh = items.filter((it) => !seenInterceptIds.current.has(it.id));
     if (fresh.length === 0) return;
@@ -286,13 +288,10 @@ export default function App() {
         })
         .catch((e) => console.error("[appscope][supabase] fetch error:", e));
     }
-  }, [pagesById]);
+  }, []);
 
   const handleToggleInterceptReporting = useCallback(
     async (pageId: string, enabled: boolean) => {
-      const snapshot = pages.find((p) => p.id === pageId);
-      if (!snapshot) return;
-      const previous = snapshot.interceptReportingEnabled;
       setPages((prev) =>
         prev.map((p) => (p.id === pageId ? { ...p, interceptReportingEnabled: enabled } : p)),
       );
@@ -302,15 +301,16 @@ export default function App() {
           setInterceptsByPage((prev) => ({ ...prev, [pageId]: [] }));
         }
       } catch (e) {
+        // Roll back the optimistic toggle (it is always a flip, so previous = !enabled).
         setPages((prev) =>
           prev.map((p) =>
-            p.id === pageId ? { ...p, interceptReportingEnabled: previous } : p,
+            p.id === pageId ? { ...p, interceptReportingEnabled: !enabled } : p,
           ),
         );
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [pages],
+    [],
   );
 
   useEffect(() => {

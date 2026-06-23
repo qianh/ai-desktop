@@ -101,16 +101,12 @@ impl FlowStore {
                 ",
             )
             .map_err(|e| e.to_string())?;
+        // Additive migration for existing DBs; NOT NULL DEFAULT 0 backfills old rows.
+        // Ignore the error when the column already exists.
         let _ = self.conn.execute(
             "ALTER TABLE pages ADD COLUMN intercept_reporting_enabled INTEGER NOT NULL DEFAULT 0",
             [],
         );
-        self.conn
-            .execute(
-                "UPDATE pages SET intercept_reporting_enabled = 0 WHERE intercept_reporting_enabled IS NULL",
-                [],
-            )
-            .ok();
         Ok(())
     }
 

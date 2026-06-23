@@ -79,17 +79,6 @@ where
     f(&mut guard)
 }
 
-/// Authoritative intercept-reporting flag for a page (SQLite).
-pub(crate) fn lookup_page_intercept_reporting(page_id: &str) -> Result<bool, String> {
-    with_state(|state| {
-        let page = state
-            .store
-            .get_page(page_id)?
-            .ok_or_else(|| format!("page not found: {page_id}"))?;
-        Ok(page.intercept_reporting_enabled)
-    })
-}
-
 fn app_to_info(app: &AppEntry) -> AppInfo {
     AppInfo {
         id: Some(app.id.clone()),
