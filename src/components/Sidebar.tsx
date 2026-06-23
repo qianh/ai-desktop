@@ -1,4 +1,4 @@
-// Left sidebar — search, All Sessions, Pages, Apps, Certificates, Settings.
+// Left sidebar — search, Pages, Apps, Certificates, Settings.
 import type { CSSProperties } from "react";
 import type { AppEntry, Page } from "../types";
 import { ACCENT, iconStyle } from "../lib/ui";
@@ -168,12 +168,10 @@ type Props = {
   apps: AppEntry[];
   navMode: string;
   activeId: string;
-  totalCount: string;
   query: string;
   collapsed: boolean;
   onToggleCollapse: () => void;
   onQuery: (v: string) => void;
-  onSelectAll: () => void;
   onSelect: (id: string) => void;
   onDeletePage: (id: string) => void | Promise<void>;
   onToggleInterceptReporting: (pageId: string, enabled: boolean) => void | Promise<void>;
@@ -213,13 +211,6 @@ export default function Sidebar(p: Props) {
           style={{ ...collapseToggle, marginBottom: 4 }}
         >
           ▶
-        </button>
-        <button
-          onClick={p.onSelectAll}
-          title="All Sessions"
-          style={{ ...collapseToggle, background: sessionsMode && p.activeId === "acme" ? ACCENT + "1f" : "none" }}
-        >
-          ≣
         </button>
         <button
           onClick={p.onOpenSessionRecords}
@@ -300,11 +291,6 @@ export default function Sidebar(p: Props) {
 
       {/* scroll list */}
       <div style={{ flex: 1, overflow: "auto", minHeight: 0, padding: "2px 8px 8px" }}>
-        <button onClick={p.onSelectAll} style={navSel(sessionsMode && p.activeId === "acme")}>
-          <span style={{ width: 18, textAlign: "center", fontSize: 13 }}>≣</span>
-          <span style={{ flex: 1, textAlign: "left" }}>All Sessions</span>
-          <span style={{ font: "11px ui-monospace,Menlo,monospace", color: "#a0a0a6" }}>{p.totalCount}</span>
-        </button>
         <button onClick={p.onOpenSessionRecords} style={navSel(p.sessionRecordsActive)}>
           <span style={{ width: 18, textAlign: "center", fontSize: 13 }}>💬</span>
           <span style={{ flex: 1, textAlign: "left" }}>会话记录</span>

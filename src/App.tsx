@@ -26,7 +26,7 @@ import {
   stopSession,
   type ApiApp,
 } from "./api";
-import { fmtSize } from "./lib/format";
+
 import type { AppEntry, Flow, InterceptedFetch, Page } from "./types";
 import TitleBar from "./components/TitleBar";
 import StatusBar from "./components/StatusBar";
@@ -191,9 +191,6 @@ export default function App() {
   const recordsMode = navMode === "records";
   const flows = activeFlows();
 
-  const totalCount = String(
-    pages.reduce((a, p) => a + (clear[p.id] ? 0 : (flowsByPage[p.id] || p.flows).length), 0)
-  );
   const titleSuffix =
     navMode === "certs"
       ? "Certificates"
@@ -205,8 +202,6 @@ export default function App() {
       ? active.name
       : "AppScope";
 
-  const done = flows.filter((f) => f.status != null);
-  const xfer = done.reduce((a, f) => a + (f.size || 0), 0);
   const statusLeft = error
     ? `Error · ${error}`
     : loading
@@ -215,9 +210,9 @@ export default function App() {
     ? active
       ? `${active.name} · Normal launch`
       : ""
-    : flows.length
-    ? `${flows.length} requests · ${fmtSize(xfer)} transferred`
-    : "Idle — no requests";
+    : recording
+    ? "Recording"
+    : "Idle";
 
   const toggleInspector = useCallback(() => setInspectorOpen((v) => !v), []);
 
@@ -575,16 +570,10 @@ export default function App() {
             apps={apps}
             navMode={navMode}
             activeId={activeId}
-            totalCount={totalCount}
             query={query}
             collapsed={sidebarCollapsed}
             onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
             onQuery={setQuery}
-            onSelectAll={() => {
-              setNavMode("sessions");
-              setActiveId("acme");
-              setInspectorOpen(true);
-            }}
             onSelect={selectSession}
             onOpenSessionRecords={handleOpenSessionRecords}
             sessionRecordsActive={recordsMode}
@@ -676,7 +665,7 @@ export default function App() {
 
         <StatusBar
           statusLeft={statusLeft}
-          live={recording && flows.length > 0}
+          live={recording}
           proxyPort={activeSessionMeta?.proxyPort}
           certState={certState}
           quicDisabled={toggles.quic}
