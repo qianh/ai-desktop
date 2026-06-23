@@ -1,7 +1,7 @@
 // Embedded page webview — loads the capture target inside AppScope via a Rust-mounted child webview.
 // Webview is created on mount and closed on unmount. Visibility is toggled via show/hide
 // so switching pages does not reload.
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   closePageWebview,
@@ -12,12 +12,13 @@ import {
   syncPageWebviewBounds,
 } from "../api";
 import { isTauriRuntime } from "../api";
+import type { PagePanelState } from "../lib/pagePanelState";
 
 type Props = {
   pageId: string;
   url: string;
   proxyPort: number;
-  active: boolean;
+  panelState: PagePanelState;
   inspectorOpen: boolean;
   onToggleInspector: () => void;
   requestCount: number;
@@ -63,7 +64,7 @@ export default function PageBrowser({
   pageId,
   url,
   proxyPort,
-  active,
+  panelState,
   inspectorOpen,
   onToggleInspector,
   requestCount,
@@ -72,8 +73,11 @@ export default function PageBrowser({
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  const activeRef = useRef(active);
-  activeRef.current = active;
+  const panelStateRef = useRef(panelState);
+  panelStateRef.current = panelState;
+
+  const layoutActive = panelState !== "hidden";
+  const active = panelState === "visible";
 
   // Mount effect — create webview once, close only on component unmount
   useLayoutEffect(() => {
@@ -193,7 +197,7 @@ export default function PageBrowser({
       webviewMounted = true;
       setMounted(true);
 
-      if (activeRef.current) {
+      if (panelStateRef.current === "visible") {
         await syncBounds();
         await setPageWebviewVisible(pageId, true);
       } else {
@@ -224,7 +228,7 @@ export default function PageBrowser({
     };
 
     resizeObserver = new ResizeObserver(() => {
-      if (activeRef.current) {
+      if (panelStateRef.current !== "hidden") {
         void syncBounds().catch(() => undefined);
       }
       if (!webviewMounted) {
@@ -255,16 +259,15 @@ export default function PageBrowser({
     };
   }, [pageId, url, proxyPort]);
 
-  // Visibility effect — show/hide native webview when active changes
+  // Visibility effect — show/hide native webview when panel state changes
   useEffect(() => {
     if (!isTauriRuntime() || !mounted) return;
-    if (active) {
+    if (panelState === "visible") {
       const show = async () => {
-        await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-        });
-        const rect = hostRef.current?.getBoundingClientRect();
-        if (rect && rect.width >= 1 && rect.height >= 1) {
+        const host = hostRef.current;
+        if (!host) return;
+        const rect = await waitForHostSize(host);
+        if (rect) {
           await syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height);
         }
         await setPageWebviewVisible(pageId, true);
@@ -273,11 +276,25 @@ export default function PageBrowser({
     } else {
       void setPageWebviewVisible(pageId, false).catch(() => undefined);
     }
-  }, [pageId, active, mounted]);
+  }, [pageId, panelState, mounted]);
+
+  // Keep bounds in sync when host stays sized but webview is hidden (e.g. 会话记录 overlay)
+  useEffect(() => {
+    if (!isTauriRuntime() || !mounted || panelState !== "layout-only") return;
+    const host = hostRef.current;
+    if (!host) return;
+    void waitForHostSize(host)
+      .then((rect) => {
+        if (rect) {
+          return syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height);
+        }
+      })
+      .catch(() => undefined);
+  }, [pageId, panelState, mounted]);
 
   // Re-sync bounds when inspector panel toggles (layout width changes)
   useEffect(() => {
-    if (!isTauriRuntime() || !mounted || !active) return;
+    if (!isTauriRuntime() || !mounted || panelState !== "visible") return;
     const timer = window.setTimeout(() => {
       const rect = hostRef.current?.getBoundingClientRect();
       if (rect && rect.width >= 1 && rect.height >= 1) {
@@ -287,32 +304,33 @@ export default function PageBrowser({
       }
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [pageId, active, mounted, inspectorOpen]);
+  }, [pageId, panelState, mounted, inspectorOpen]);
+
+  const showChrome = active;
+  const panelStyle: CSSProperties = layoutActive
+    ? {
+        flex: inspectorOpen && active ? "0 0 58%" : 1,
+        minWidth: 0,
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
+        borderRight: inspectorOpen && active ? "1px solid #ededf0" : "none",
+        background: "#f6f6f8",
+        visibility: active ? "visible" : "hidden",
+        pointerEvents: active ? "auto" : "none",
+      }
+    : {
+        position: "absolute",
+        width: 0,
+        height: 0,
+        overflow: "hidden",
+        opacity: 0,
+        pointerEvents: "none",
+      };
 
   return (
-    <div
-      style={
-        active
-          ? {
-              flex: inspectorOpen ? "0 0 58%" : 1,
-              minWidth: 0,
-              minHeight: 0,
-              display: "flex",
-              flexDirection: "column",
-              borderRight: inspectorOpen ? "1px solid #ededf0" : "none",
-              background: "#f6f6f8",
-            }
-          : {
-              position: "absolute",
-              width: 0,
-              height: 0,
-              overflow: "hidden",
-              opacity: 0,
-              pointerEvents: "none",
-            }
-      }
-    >
-      {active && (
+    <div style={panelStyle}>
+      {showChrome && (
         <div
           style={{
             display: "flex",
@@ -358,7 +376,7 @@ export default function PageBrowser({
         </div>
       )}
       <div ref={hostRef} style={{ flex: 1, minHeight: 0, position: "relative", background: "#ffffff" }}>
-        {active && status === "loading" && (
+        {showChrome && status === "loading" && (
           <div
             style={{
               position: "absolute",
@@ -374,7 +392,7 @@ export default function PageBrowser({
             正在加载页面…
           </div>
         )}
-        {active && status === "error" && (
+        {showChrome && status === "error" && (
           <div
             style={{
               position: "absolute",

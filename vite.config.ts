@@ -7,6 +7,10 @@ const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: "node",
+    include: ["src/**/*.test.ts"],
+  },
   clearScreen: false,
   server: {
     port: 1420,

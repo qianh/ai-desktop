@@ -11,7 +11,8 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "verify:mvp-capture": "cargo run --manifest-path src-tauri/Cargo.toml --bin verify_mvp_capture"
+    "verify:mvp-capture": "cargo run --manifest-path src-tauri/Cargo.toml --bin verify_mvp_capture",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",
@@ -24,6 +25,7 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^3.0.5"
   }
 }

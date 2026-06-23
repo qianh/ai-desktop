@@ -1,19 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchConversationIntercepts, fetchSessionRecordSummaries, REPORTED_INTERCEPTS_LIMIT } from "../api";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { fetchSessionRecordSummaries, REPORTED_INTERCEPTS_LIMIT } from "../api";
 import { formatTimestamp } from "../lib/format";
 import { conversationPreview, parseConversationBodies } from "../lib/conversationFilter";
+import { pageListIdentityKey } from "../lib/pagePanelState";
 import { loadSupabaseConfig } from "../lib/supabase";
 import { truncateBody } from "../lib/truncate";
-import type { InterceptedFetch, Page, SessionRecordSummary } from "../types";
+import { useConversationRecords } from "../hooks/useConversationRecords";
+import type { Page, SessionRecordSummary } from "../types";
 import { ACCENT, iconStyle } from "../lib/ui";
 
 type Props = {
   pages: Page[];
   selectedPageId: string | null;
   onSelectPage: (pageId: string) => void;
+  invalidateByPage: Record<string, number>;
 };
 
-const refreshBtnStyle = (loading: boolean): React.CSSProperties => ({
+const refreshBtnStyle = (loading: boolean): CSSProperties => ({
   fontSize: 12,
   padding: "5px 12px",
   borderRadius: 6,
@@ -85,37 +88,16 @@ function Bubble({
   );
 }
 
-function ConversationDetail({ pageId, pageName }: { pageId: string; pageName: string }) {
-  const [items, setItems] = useState<InterceptedFetch[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(
-    async (signal?: AbortSignal) => {
-      const config = loadSupabaseConfig();
-      if (!config.url || !config.key) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const rows = await fetchConversationIntercepts(pageId, config, signal);
-        if (signal?.aborted) return;
-        setItems(rows);
-      } catch (e) {
-        if (signal?.aborted) return;
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (!signal?.aborted) setLoading(false);
-      }
-    },
-    [pageId],
-  );
-
-  useEffect(() => {
-    const ac = new AbortController();
-    setItems([]);
-    void load(ac.signal);
-    return () => ac.abort();
-  }, [load]);
+function ConversationDetail({
+  pageId,
+  pageName,
+  invalidateKey,
+}: {
+  pageId: string;
+  pageName: string;
+  invalidateKey: number;
+}) {
+  const { items, loading, error, refresh } = useConversationRecords(pageId, invalidateKey);
 
   return (
     <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
@@ -141,11 +123,7 @@ function ConversationDetail({ pageId, pageName }: { pageId: string; pageName: st
             )}
           </div>
         </div>
-        <button
-          onClick={() => void load()}
-          disabled={loading}
-          style={refreshBtnStyle(loading)}
-        >
+        <button onClick={refresh} disabled={loading} style={refreshBtnStyle(loading)}>
           刷新
         </button>
       </div>
@@ -165,8 +143,7 @@ function ConversationDetail({ pageId, pageName }: { pageId: string; pageName: st
         )}
         {items.map((item) => {
           const { user, assistant, rawReq, rawResp } = parseConversationBodies(item);
-          const urlShort =
-            item.url.length > 72 ? item.url.slice(0, 72) + "…" : item.url;
+          const urlShort = item.url.length > 72 ? item.url.slice(0, 72) + "…" : item.url;
           return (
             <div
               key={item.id}
@@ -198,13 +175,17 @@ function ConversationDetail({ pageId, pageName }: { pageId: string; pageName: st
   );
 }
 
-export default function SessionRecordsView({ pages, selectedPageId, onSelectPage }: Props) {
+export default function SessionRecordsView({ pages, selectedPageId, onSelectPage, invalidateByPage }: Props) {
   const [summaries, setSummaries] = useState<SessionRecordSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const config = useMemo(() => loadSupabaseConfig(), []);
   const unconfigured = !config.url || !config.key;
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
+
+  const pageListKey = pageListIdentityKey(pages);
 
   const loadSummaries = useCallback(
     async (signal?: AbortSignal) => {
@@ -212,7 +193,7 @@ export default function SessionRecordsView({ pages, selectedPageId, onSelectPage
       setLoading(true);
       setError(null);
       try {
-        const rows = await fetchSessionRecordSummaries(pages, config, signal);
+        const rows = await fetchSessionRecordSummaries(pagesRef.current, config, signal);
         if (signal?.aborted) return;
         setSummaries(rows);
       } catch (e) {
@@ -222,7 +203,7 @@ export default function SessionRecordsView({ pages, selectedPageId, onSelectPage
         if (!signal?.aborted) setLoading(false);
       }
     },
-    [config.key, config.url, pages],
+    [config.key, config.url, pageListKey],
   );
 
   useEffect(() => {
@@ -385,6 +366,7 @@ export default function SessionRecordsView({ pages, selectedPageId, onSelectPage
           <ConversationDetail
             pageId={selectedPageId || selected!.pageId}
             pageName={selected?.pageName || "会话"}
+            invalidateKey={invalidateByPage[selectedPageId || selected!.pageId] ?? 0}
           />
         ) : (
           <div

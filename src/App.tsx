@@ -15,7 +15,6 @@ import {
   mapFlowListItem,
   openCertificateGuide,
   closePageWebview,
-  setPageWebviewVisible,
   openPageWithCapture,
   removeApp,
   removeCertificate,
@@ -30,13 +29,9 @@ import type { AppEntry, Flow, InterceptedFetch, Page } from "./types";
 import TitleBar from "./components/TitleBar";
 import StatusBar from "./components/StatusBar";
 import Sidebar from "./components/Sidebar";
-import FlowTable from "./components/FlowTable";
-import EmptyState from "./components/EmptyState";
-import PageBrowser from "./components/PageBrowser";
-import AppDetail from "./components/AppDetail";
 import CertManager from "./components/CertManager";
-import InterceptPanel from "./components/InterceptPanel";
-import SessionRecordsView from "./components/SessionRecordsView";
+import SessionsWorkspace from "./components/SessionsWorkspace";
+import { invalidateConversationRecords } from "./hooks/useConversationRecords";
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
 import AddPageModal from "./components/modals/AddPageModal";
 import AddAppModal from "./components/modals/AddAppModal";
@@ -83,6 +78,7 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [interceptsByPage, setInterceptsByPage] = useState<Record<string, InterceptedFetch[]>>({});
   const [recordsPageId, setRecordsPageId] = useState<string | null>(null);
+  const [recordsInvalidate, setRecordsInvalidate] = useState<Record<string, number>>({});
 
   const refreshPages = useCallback(async () => {
     const apiPages = await listPages();
@@ -172,23 +168,12 @@ export default function App() {
     return f[0].id;
   };
 
-  const restorePageWebview = useCallback(async (pageId: string) => {
-    if (!sessionMetaByPage[pageId]) return;
-    await new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    });
-    await setPageWebviewVisible(pageId, true).catch(() => undefined);
-  }, [sessionMetaByPage]);
-
   const selectSession = (id: string) => {
     const app = isAppId(id);
     setNavMode("sessions");
     setActiveId(id);
     if (!app) {
       setSelectedFlowId(firstId(id));
-      if (sessionMetaByPage[id]) {
-        void restorePageWebview(id);
-      }
     }
   };
 
@@ -197,11 +182,6 @@ export default function App() {
     const pageId =
       activeId && !isAppId(activeId) ? activeId : pages[0]?.id ?? null;
     setRecordsPageId(pageId);
-    void Promise.all(
-      Object.keys(sessionMetaByPage).map((id) =>
-        setPageWebviewVisible(id, false).catch(() => undefined),
-      ),
-    );
   };
 
   const active = find(activeId);
@@ -284,6 +264,11 @@ export default function App() {
     setInterceptsByPage((prev) => ({
       ...prev,
       [pageId]: [...(prev[pageId] || []), ...fresh],
+    }));
+    invalidateConversationRecords(pageId);
+    setRecordsInvalidate((prev) => ({
+      ...prev,
+      [pageId]: (prev[pageId] ?? 0) + 1,
     }));
 
     const sbConfig = loadSupabaseConfig();
@@ -381,8 +366,6 @@ export default function App() {
 
   const handleDeletePage = (pageId: string) => {
     const page = pages.find((p) => p.id === pageId);
-    // Native child webview renders above HTML — hide it so the confirm dialog is visible.
-    void setPageWebviewVisible(pageId, false).catch(() => undefined);
     setDeleteTarget({ id: pageId, name: page?.name || "Page" });
   };
 
@@ -486,15 +469,7 @@ export default function App() {
   );
 
   const activeSessionMeta = sessionMetaByPage[activeId];
-  const noOverlay = modal == null && deleteTarget == null && deleteAppTarget == null;
-  const deletingActivePage = deleteTarget?.id === activeId;
-  const showApp = sessionsMode && isApp;
-  const showPageCapture =
-    sessionsMode && !isApp && !!activeSessionMeta && !deletingActivePage && deleteTarget == null;
-  const showEmpty =
-    sessionsMode && !isApp && !showPageCapture && flows.length === 0 && !loading && !deleteTarget;
-  const showDeletePlaceholder = sessionsMode && !isApp && !!deleteTarget && !showPageCapture;
-  const showFlows = sessionsMode && !isApp && flows.length > 0;
+  const overlayOpen = modal != null || deleteAppTarget != null;
 
   useEffect(() => {
     if (
@@ -512,11 +487,6 @@ export default function App() {
     autoCaptureAttempted.current.add(activeId);
     void handleStartCaptureForPage(activeId);
   }, [activeId, activeSessionMeta, captureBusy, isApp, loading, sessionsMode]);
-
-  useEffect(() => {
-    if (!sessionsMode || isApp || !activeId || !sessionMetaByPage[activeId]) return;
-    void restorePageWebview(activeId);
-  }, [activeId, isApp, restorePageWebview, sessionMetaByPage, sessionsMode]);
 
   return (
     <div
@@ -615,127 +585,40 @@ export default function App() {
               />
             )}
             {navMode === "settings" && <Settings toggles={toggles} onToggle={toggle} />}
-            {recordsMode && (
-              <SessionRecordsView
-                pages={enrichedPages}
-                selectedPageId={recordsPageId}
-                onSelectPage={setRecordsPageId}
-              />
-            )}
-            {showApp && active && "bundle" in active && (
-              <AppDetail
-                app={active}
-                launchMode={launchMode}
-                onLaunchMode={setLaunchMode}
-                onLaunch={() => handleLaunchApp(active.id)}
-              />
-            )}
-            {showDeletePlaceholder && (
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#9a9aa0",
-                  fontSize: 13,
-                }}
-              >
-                请在弹窗中确认删除…
-              </div>
-            )}
-            {showEmpty && (
-              <EmptyState
-                busy={captureBusy}
-                onOpenCapture={
-                  activeId ? () => handleStartCaptureForPage(activeId) : undefined
-                }
-              />
-            )}
-            {sessionsMode && !isApp && pages.length === 0 && !loading && (
-              <div
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 12,
-                  color: "#9a9aa0",
-                  fontSize: 13,
-                }}
-              >
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#1d1d1f" }}>还没有页面</div>
-                <div>点击左侧 Pages 旁的 + 添加一个 URL</div>
-              </div>
-            )}
-            {sessionsMode && Object.keys(sessionMetaByPage).length > 0 && (
-              <div style={{
-                display: "flex",
-                minWidth: 0,
-                position: "relative",
-                ...(showPageCapture
-                  ? { flex: 1, minHeight: 0 }
-                  : { flex: "none" as const, height: 0, overflow: "hidden" as const }),
-              }}>
-                {Object.entries(sessionMetaByPage).map(([pgId, meta]) => (
-                  <PageBrowser
-                    key={`${pgId}-${meta.proxyPort}`}
-                    pageId={pgId}
-                    url={meta.pageUrl}
-                    proxyPort={meta.proxyPort}
-                    active={activeId === pgId && sessionsMode && !isApp && noOverlay}
-                    inspectorOpen={inspectorOpen}
-                    onToggleInspector={toggleInspector}
-                    requestCount={(flowsByPage[pgId] || []).length}
-                  />
-                ))}
-                {inspectorOpen && showPageCapture && (
-                <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
-                  {showFlows ? (
-                    <FlowTable
-                      flows={flows}
-                      variant={variant}
-                      showWaterfall
-                      query={query}
-                      filter={filter}
-                      selectedId={selectedFlowId}
-                      recording={recording}
-                      onSelect={handleSelectFlow}
-                      onQuery={setQuery}
-                      onFilter={setFilter}
-                      onToggleRecord={handleStopRecording}
-                      onClear={clearFlows}
-                    />
-                  ) : (
-                    <EmptyState busy={captureBusy} />
-                  )}
-                  {(interceptsByPage[activeId]?.length ?? 0) > 0 && (
-                    <div style={{ borderTop: "1px solid #ededf0", maxHeight: "40%", overflow: "auto" }}>
-                      <div style={{ padding: "6px 10px", fontWeight: 600, fontSize: 11, color: "#5a5a5e", background: "#fbfbfc", borderBottom: "1px solid #ededf0" }}>
-                        Intercepted Content ({interceptsByPage[activeId].length})
-                      </div>
-                      <InterceptPanel intercepts={interceptsByPage[activeId]} />
-                    </div>
-                  )}
-                </div>
-                )}
-              </div>
-            )}
-            {!showPageCapture && showFlows && (
-              <FlowTable
+            {(sessionsMode || recordsMode) && (
+              <SessionsWorkspace
+                navMode={navMode}
+                activeId={activeId}
+                isApp={isApp}
+                pages={pages}
+                active={active}
+                sessionMetaByPage={sessionMetaByPage}
+                flowsByPage={flowsByPage}
                 flows={flows}
+                interceptsByPage={interceptsByPage}
+                recordsPageId={recordsPageId}
+                recordsInvalidate={recordsInvalidate}
+                loading={loading}
+                deleteTargetId={deleteTarget?.id ?? null}
+                overlayOpen={overlayOpen}
                 variant={variant}
-                showWaterfall
+                inspectorOpen={inspectorOpen}
                 query={query}
                 filter={filter}
-                selectedId={selectedFlowId}
+                selectedFlowId={selectedFlowId}
                 recording={recording}
-                onSelect={handleSelectFlow}
+                captureBusy={captureBusy}
+                launchMode={launchMode}
+                onSelectPage={setRecordsPageId}
+                onToggleInspector={toggleInspector}
+                onSelectFlow={handleSelectFlow}
                 onQuery={setQuery}
                 onFilter={setFilter}
                 onToggleRecord={handleStopRecording}
-                onClear={clearFlows}
+                onClearFlows={clearFlows}
+                onStartCapture={handleStartCaptureForPage}
+                onLaunchMode={setLaunchMode}
+                onLaunchApp={handleLaunchApp}
               />
             )}
           </div>
