@@ -78,6 +78,38 @@
   animation: ascPageStatusLive 2s ease-in-out infinite;
 }
 
+/* Sidebar list rows — selected highlight + hover-only delete */
+.asc-sidebar-row {
+  transition: background 0.12s ease;
+}
+
+.asc-sidebar-row:hover:not(.asc-sidebar-row--selected) {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.asc-sidebar-row--selected {
+  background: rgba(0, 122, 255, 0.12);
+}
+
+.asc-sidebar-row__delete {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.asc-sidebar-row:hover .asc-sidebar-row__delete,
+.asc-sidebar-row:focus-within .asc-sidebar-row__delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .asc-sidebar-row__delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 @keyframes ascSpin {
   to { transform: rotate(360deg); }
 }

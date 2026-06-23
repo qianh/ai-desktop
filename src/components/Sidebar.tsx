@@ -3,18 +3,17 @@ import type { CSSProperties } from "react";
 import type { AppEntry, Page } from "../types";
 import { ACCENT, iconStyle } from "../lib/ui";
 
-const rowBase: CSSProperties = {
+const listRowStyle = (overflow: "visible" | "hidden"): CSSProperties => ({
   display: "flex",
   alignItems: "center",
   gap: 9,
   width: "100%",
   border: "none",
-  background: "none",
-  cursor: "pointer",
   borderRadius: 8,
-  padding: "6px 9px",
+  padding: 0,
   marginBottom: 1,
-};
+  overflow,
+});
 const navBase: CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -187,7 +186,9 @@ type Props = {
 export default function Sidebar(p: Props) {
   const sessionsMode = p.navMode === "sessions";
   const navSel = (on: boolean): CSSProperties => (on ? { ...navBase, background: ACCENT + "1f" } : navBase);
-  const rowSel = (on: boolean): CSSProperties => (on ? { ...rowBase, background: ACCENT + "22" } : rowBase);
+  const rowSelected = (id: string) => sessionsMode && p.activeId === id;
+  const listRowClass = (selected: boolean) =>
+    selected ? "asc-sidebar-row asc-sidebar-row--selected" : "asc-sidebar-row";
 
   if (p.collapsed) {
     return (
@@ -220,7 +221,7 @@ export default function Sidebar(p: Props) {
           💬
         </button>
         {p.pages.map((pg) => {
-          const sel = sessionsMode && p.activeId === pg.id;
+          const sel = rowSelected(pg.id);
           const isCapturing = pg.status === "capturing";
           return (
             <div
@@ -251,7 +252,7 @@ export default function Sidebar(p: Props) {
             key={a.id}
             onClick={() => p.onSelect(a.id)}
             title={a.name}
-            style={{ ...collapsedIconBtn(sessionsMode && p.activeId === a.id), color: a.color || "#5a5a5e" }}
+            style={{ ...collapsedIconBtn(rowSelected(a.id)), color: a.color || "#5a5a5e" }}
           >
             {a.letter}
           </button>
@@ -303,11 +304,15 @@ export default function Sidebar(p: Props) {
           </button>
         </div>
         {p.pages.map((pg) => {
-          const sel = sessionsMode && p.activeId === pg.id;
+          const sel = rowSelected(pg.id);
           const isCapturing = pg.status === "capturing";
           const reportingOn = pg.interceptReportingEnabled;
           return (
-            <div key={pg.id} style={{ ...rowSel(sel), padding: 0, overflow: "visible" }}>
+            <div
+              key={pg.id}
+              className={listRowClass(sel)}
+              style={listRowStyle("visible")}
+            >
               <button onClick={() => p.onSelect(pg.id)} style={itemBtn}>
                 <span style={{ position: "relative", flex: "none", display: "flex" }}>
                   <span style={iconStyle(pg.color)}>{pg.letter}</span>
@@ -335,6 +340,7 @@ export default function Sidebar(p: Props) {
                 }}
                 title="Delete Page"
                 aria-label={`Delete ${pg.name}`}
+                className="asc-sidebar-row__delete"
                 style={deleteBtn}
               >
                 ×
@@ -350,9 +356,13 @@ export default function Sidebar(p: Props) {
           </button>
         </div>
         {p.apps.map((a) => {
-          const sel = sessionsMode && p.activeId === a.id;
+          const sel = rowSelected(a.id);
           return (
-            <div key={a.id} style={{ ...rowSel(sel), padding: 0, overflow: "hidden" }}>
+            <div
+              key={a.id}
+              className={listRowClass(sel)}
+              style={listRowStyle("hidden")}
+            >
               <button onClick={() => p.onSelect(a.id)} style={itemBtn}>
                 <span style={iconStyle(a.color)}>{a.letter}</span>
                 <span style={{ flex: 1, textAlign: "left", minWidth: 0, overflow: "hidden" }}>
@@ -370,6 +380,7 @@ export default function Sidebar(p: Props) {
                 }}
                 title="Delete App"
                 aria-label={`Delete ${a.name}`}
+                className="asc-sidebar-row__delete"
                 style={deleteBtn}
               >
                 ×
