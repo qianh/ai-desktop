@@ -205,9 +205,9 @@ export function buildAppData(): AppData {
   return {
     defaultSel: acme[5].id,
     pages: [
-      { id: "acme", name: "Acme Console", host: "app.acme.so", status: "capturing", letter: "A", color: "#1e66d0", flows: acme },
-      { id: "admin", name: "Admin Dashboard", host: "admin.acme.so", status: "idle", letter: "A", color: "#b26b00", flows: [] },
-      { id: "local", name: "localhost:3000", host: "Vite dev server", status: "capturing", letter: "L", color: "#30a14e", flows: local },
+      { id: "acme", name: "Acme Console", host: "app.acme.so", status: "capturing", letter: "A", color: "#1e66d0", flows: acme, interceptReportingEnabled: false },
+      { id: "admin", name: "Admin Dashboard", host: "admin.acme.so", status: "idle", letter: "A", color: "#b26b00", flows: [], interceptReportingEnabled: false },
+      { id: "local", name: "localhost:3000", host: "Vite dev server", status: "capturing", letter: "L", color: "#30a14e", flows: local, interceptReportingEnabled: false },
     ],
     apps: [
       { id: "chrome", name: "Google Chrome", bundle: "com.google.Chrome", path: "/Applications/Google Chrome.app", mode: "Normal launch", letter: "C", color: "#5b6470" },

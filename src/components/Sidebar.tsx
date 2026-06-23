@@ -104,6 +104,78 @@ function collapsedIconBtn(sel: boolean): CSSProperties {
   };
 }
 
+function reportingTip(enabled: boolean): string {
+  return enabled ? "拦截与上报：已开启" : "拦截与上报：已关闭";
+}
+
+type ReportingToggleProps = {
+  pageId: string;
+  enabled: boolean;
+  compact?: boolean;
+  onToggle: (pageId: string, enabled: boolean) => void | Promise<void>;
+};
+
+function ReportingToggle({ pageId, enabled, compact, onToggle }: ReportingToggleProps) {
+  const tip = reportingTip(enabled);
+  const btnStyle: CSSProperties = compact
+    ? {
+        appearance: "none",
+        border: "none",
+        background: enabled ? "rgba(0, 122, 255, 0.12)" : "transparent",
+        cursor: "pointer",
+        width: 18,
+        height: 14,
+        borderRadius: 4,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 9,
+        lineHeight: 1,
+        color: enabled ? ACCENT : "#8e8e93",
+        padding: 0,
+      }
+    : {
+        appearance: "none",
+        border: "none",
+        background: enabled ? "rgba(0, 122, 255, 0.1)" : "transparent",
+        cursor: "pointer",
+        flex: "none",
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 13,
+        lineHeight: 1,
+        color: enabled ? ACCENT : "#8e8e93",
+        position: "relative",
+        zIndex: 2,
+        transition: "background 0.12s ease, color 0.12s ease",
+      };
+
+  return (
+    <span className="asc-hover-tip">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          void onToggle(pageId, !enabled);
+        }}
+        aria-label={tip}
+        aria-pressed={enabled}
+        style={btnStyle}
+      >
+        {enabled ? "◉" : "○"}
+      </button>
+      <span className="asc-hover-tip__bubble" role="tooltip">
+        {tip}
+      </span>
+    </span>
+  );
+}
+
 type Props = {
   pages: Page[];
   apps: AppEntry[];
@@ -117,6 +189,7 @@ type Props = {
   onSelectAll: () => void;
   onSelect: (id: string) => void;
   onDeletePage: (id: string) => void | Promise<void>;
+  onToggleInterceptReporting: (pageId: string, enabled: boolean) => void | Promise<void>;
   onDeleteApp: (id: string) => void | Promise<void>;
   onAddPage: () => void;
   onAddApp: () => void;
@@ -170,15 +243,29 @@ export default function Sidebar(p: Props) {
         </button>
         {p.pages.map((pg) => {
           const sel = sessionsMode && p.activeId === pg.id;
+          const isCapturing = pg.status === "capturing";
           return (
-            <button
+            <div
               key={pg.id}
-              onClick={() => p.onSelect(pg.id)}
-              title={pg.name}
-              style={{ ...collapsedIconBtn(sel), color: pg.color || "#5a5a5e" }}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}
             >
-              {pg.letter}
-            </button>
+              <button
+                onClick={() => p.onSelect(pg.id)}
+                title={pg.name}
+                style={{ ...collapsedIconBtn(sel), color: pg.color || "#5a5a5e", position: "relative" }}
+              >
+                {pg.letter}
+                {isCapturing && (
+                  <span className="asc-page-status asc-page-status--live" aria-hidden />
+                )}
+              </button>
+              <ReportingToggle
+                pageId={pg.id}
+                enabled={pg.interceptReportingEnabled}
+                compact
+                onToggle={p.onToggleInterceptReporting}
+              />
+            </div>
           );
         })}
         {p.apps.map((a) => (
@@ -244,28 +331,29 @@ export default function Sidebar(p: Props) {
         </div>
         {p.pages.map((pg) => {
           const sel = sessionsMode && p.activeId === pg.id;
-          const dot = pg.status === "capturing" ? "#30a14e" : "#c4c4c8";
+          const isCapturing = pg.status === "capturing";
+          const reportingOn = pg.interceptReportingEnabled;
           return (
-            <div key={pg.id} style={{ ...rowSel(sel), padding: 0, overflow: "hidden" }}>
+            <div key={pg.id} style={{ ...rowSel(sel), padding: 0, overflow: "visible" }}>
               <button onClick={() => p.onSelect(pg.id)} style={itemBtn}>
-                <span style={iconStyle(pg.color)}>{pg.letter}</span>
+                <span style={{ position: "relative", flex: "none", display: "flex" }}>
+                  <span style={iconStyle(pg.color)}>{pg.letter}</span>
+                  {isCapturing && (
+                    <span className="asc-page-status asc-page-status--live" aria-hidden />
+                  )}
+                </span>
                 <span style={{ flex: 1, textAlign: "left", minWidth: 0, overflow: "hidden" }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 500, color: "#1d1d1f", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {pg.name}
                   </span>
                   <span style={{ display: "block", fontSize: 11, color: "#9a9aa0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pg.host}</span>
                 </span>
-                <span
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: "50%",
-                    flex: "none",
-                    background: dot,
-                    animation: pg.status === "capturing" ? "ascPulse 1.6s infinite" : undefined,
-                  }}
-                />
               </button>
+              <ReportingToggle
+                pageId={pg.id}
+                enabled={reportingOn}
+                onToggle={p.onToggleInterceptReporting}
+              />
               <button
                 onClick={(e) => {
                   e.preventDefault();

@@ -18,6 +18,7 @@ type Props = {
   pageId: string;
   url: string;
   proxyPort: number;
+  interceptReportingEnabled: boolean;
   panelState: PagePanelState;
   inspectorOpen: boolean;
   onToggleInspector: () => void;
@@ -64,17 +65,25 @@ export default function PageBrowser({
   pageId,
   url,
   proxyPort,
+  interceptReportingEnabled,
   panelState,
   inspectorOpen,
   onToggleInspector,
   requestCount,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const lastNavUrlRef = useRef(url);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [displayUrl, setDisplayUrl] = useState(url);
   const panelStateRef = useRef(panelState);
   panelStateRef.current = panelState;
+
+  useEffect(() => {
+    lastNavUrlRef.current = url;
+    setDisplayUrl(url);
+  }, [pageId, url]);
 
   const layoutActive = panelState !== "hidden";
   const active = panelState === "visible";
@@ -146,11 +155,21 @@ export default function PageBrowser({
       await syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height);
     };
 
+    const rememberNavUrl = (currentUrl: string | null | undefined) => {
+      if (!currentUrl) return;
+      const trimmed = currentUrl.trim();
+      if (!trimmed || trimmed.toLowerCase() === "about:blank") return;
+      lastNavUrlRef.current = trimmed;
+      setDisplayUrl(trimmed);
+    };
+
     const pollWebviewUrl = async () => {
       if (cancelled || loaded) return;
       try {
         const currentUrl = await getPageWebviewUrl(pageId);
-        if (looksLoaded(currentUrl, url)) {
+        rememberNavUrl(currentUrl);
+        const expected = lastNavUrlRef.current || url;
+        if (looksLoaded(currentUrl, expected)) {
           markReady();
         }
       } catch {
@@ -165,12 +184,14 @@ export default function PageBrowser({
         if (cancelled || payload.page_id !== pageId) return;
 
         if (payload.event === "started") {
+          rememberNavUrl(payload.url);
           setStatus("loading");
           setError(null);
           scheduleLoadTimeout();
           return;
         }
 
+        rememberNavUrl(payload.url);
         markReady();
       });
     };
@@ -188,7 +209,17 @@ export default function PageBrowser({
       setError(null);
       loaded = false;
 
-      await mountPageWebview(pageId, url, proxyPort, rect.x, rect.y, rect.width, rect.height);
+      const mountUrl = lastNavUrlRef.current || url;
+      await mountPageWebview(
+        pageId,
+        mountUrl,
+        proxyPort,
+        interceptReportingEnabled,
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height,
+      );
       if (cancelled) {
         await closePageWebview(pageId);
         return;
@@ -257,7 +288,7 @@ export default function PageBrowser({
       resizeObserver?.disconnect();
       void closePageWebview(pageId);
     };
-  }, [pageId, url, proxyPort]);
+  }, [pageId, url, proxyPort, interceptReportingEnabled]);
 
   // Visibility effect — show/hide native webview when panel state changes
   useEffect(() => {
@@ -354,7 +385,7 @@ export default function PageBrowser({
               textOverflow: "ellipsis",
             }}
           >
-            {url}
+            {displayUrl}
           </span>
           <button
             onClick={onToggleInspector}

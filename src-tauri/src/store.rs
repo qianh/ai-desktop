@@ -50,6 +50,7 @@ impl FlowStore {
                     browser_app_id TEXT,
                     profile_id TEXT,
                     capture_mode TEXT NOT NULL DEFAULT 'chrome_session',
+                    intercept_reporting_enabled INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -99,14 +100,25 @@ impl FlowStore {
                 CREATE INDEX IF NOT EXISTS idx_flows_session ON flows(session_id);
                 ",
             )
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        let _ = self.conn.execute(
+            "ALTER TABLE pages ADD COLUMN intercept_reporting_enabled INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
+        self.conn
+            .execute(
+                "UPDATE pages SET intercept_reporting_enabled = 0 WHERE intercept_reporting_enabled IS NULL",
+                [],
+            )
+            .ok();
+        Ok(())
     }
 
     pub fn save_page(&self, page: &Page) -> Result<(), String> {
         self.conn
             .execute(
-                "INSERT OR REPLACE INTO pages (id, name, url, browser_app_id, profile_id, capture_mode, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                "INSERT OR REPLACE INTO pages (id, name, url, browser_app_id, profile_id, capture_mode, intercept_reporting_enabled, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     page.id,
                     page.name,
@@ -114,6 +126,7 @@ impl FlowStore {
                     page.browser_app_id,
                     page.profile_id,
                     page.capture_mode,
+                    i32::from(page.intercept_reporting_enabled),
                     page.created_at.to_rfc3339(),
                     page.updated_at.to_rfc3339(),
                 ],
@@ -126,7 +139,7 @@ impl FlowStore {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT id, name, url, browser_app_id, profile_id, capture_mode, created_at, updated_at FROM pages ORDER BY updated_at DESC",
+                "SELECT id, name, url, browser_app_id, profile_id, capture_mode, intercept_reporting_enabled, created_at, updated_at FROM pages ORDER BY updated_at DESC",
             )
             .map_err(|e| e.to_string())?;
         let rows = stmt
@@ -138,8 +151,9 @@ impl FlowStore {
                     browser_app_id: row.get(3)?,
                     profile_id: row.get(4)?,
                     capture_mode: row.get(5)?,
-                    created_at: parse_ts(row.get::<_, String>(6)?),
-                    updated_at: parse_ts(row.get::<_, String>(7)?),
+                    intercept_reporting_enabled: row.get::<_, i32>(6)? != 0,
+                    created_at: parse_ts(row.get::<_, String>(7)?),
+                    updated_at: parse_ts(row.get::<_, String>(8)?),
                 })
             })
             .map_err(|e| e.to_string())?;
@@ -151,7 +165,7 @@ impl FlowStore {
         let mut stmt = self
             .conn
             .prepare(
-                "SELECT id, name, url, browser_app_id, profile_id, capture_mode, created_at, updated_at FROM pages WHERE id = ?1",
+                "SELECT id, name, url, browser_app_id, profile_id, capture_mode, intercept_reporting_enabled, created_at, updated_at FROM pages WHERE id = ?1",
             )
             .map_err(|e| e.to_string())?;
         let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
@@ -173,6 +187,25 @@ impl FlowStore {
             .map_err(|e| e.to_string())?;
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())
+    }
+
+    pub fn set_page_intercept_reporting(
+        &self,
+        page_id: &str,
+        enabled: bool,
+    ) -> Result<Page, String> {
+        let changed = self
+            .conn
+            .execute(
+                "UPDATE pages SET intercept_reporting_enabled = ?1 WHERE id = ?2",
+                params![i32::from(enabled), page_id],
+            )
+            .map_err(|e| e.to_string())?;
+        if changed == 0 {
+            return Err("page not found".into());
+        }
+        self.get_page(page_id)?
+            .ok_or_else(|| "page not found".into())
     }
 
     pub fn delete_page(&self, page_id: &str) -> Result<(), String> {
@@ -414,8 +447,9 @@ fn read_page_row(row: &rusqlite::Row<'_>) -> Result<Page, String> {
         browser_app_id: row.get(3).map_err(|e| e.to_string())?,
         profile_id: row.get(4).map_err(|e| e.to_string())?,
         capture_mode: row.get(5).map_err(|e| e.to_string())?,
-        created_at: parse_ts(row.get::<_, String>(6).map_err(|e| e.to_string())?),
-        updated_at: parse_ts(row.get::<_, String>(7).map_err(|e| e.to_string())?),
+        intercept_reporting_enabled: row.get::<_, i32>(6).map_err(|e| e.to_string())? != 0,
+        created_at: parse_ts(row.get::<_, String>(7).map_err(|e| e.to_string())?),
+        updated_at: parse_ts(row.get::<_, String>(8).map_err(|e| e.to_string())?),
     })
 }
 
@@ -530,6 +564,7 @@ mod tests {
             browser_app_id: None,
             profile_id: None,
             capture_mode: "chrome_session".into(),
+            intercept_reporting_enabled: false,
             created_at: now,
             updated_at: now,
         };
@@ -649,6 +684,7 @@ mod tests {
             browser_app_id: None,
             profile_id: None,
             capture_mode: "chrome_session".into(),
+            intercept_reporting_enabled: false,
             created_at: now,
             updated_at: now,
         };
@@ -699,5 +735,51 @@ mod tests {
         assert!(store.get_page(&page.id).unwrap().is_none());
         assert!(store.get_session(&session.id).unwrap().is_none());
         assert!(store.list_flows(&session.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn new_page_defaults_intercept_reporting_disabled() {
+        let dir = tempdir().unwrap();
+        let store = FlowStore::open_at(&dir.path().join("appscope.db"), dir.path()).unwrap();
+        let now = Utc::now();
+        let page = Page {
+            id: "page-new".into(),
+            name: "New".into(),
+            url: "https://example.com/".into(),
+            browser_app_id: None,
+            profile_id: None,
+            capture_mode: "chrome_session".into(),
+            intercept_reporting_enabled: false,
+            created_at: now,
+            updated_at: now,
+        };
+        store.save_page(&page).unwrap();
+        let loaded = store.get_page("page-new").unwrap().expect("page");
+        assert!(!loaded.intercept_reporting_enabled);
+    }
+
+    #[test]
+    fn set_page_intercept_reporting_persists_toggle() {
+        let dir = tempdir().unwrap();
+        let store = FlowStore::open_at(&dir.path().join("appscope.db"), dir.path()).unwrap();
+        let now = Utc::now();
+        let page = Page {
+            id: "page-toggle".into(),
+            name: "Toggle".into(),
+            url: "https://example.com/".into(),
+            browser_app_id: None,
+            profile_id: None,
+            capture_mode: "chrome_session".into(),
+            intercept_reporting_enabled: false,
+            created_at: now,
+            updated_at: now,
+        };
+        store.save_page(&page).unwrap();
+        let enabled = store
+            .set_page_intercept_reporting("page-toggle", true)
+            .unwrap();
+        assert!(enabled.intercept_reporting_enabled);
+        let reloaded = store.get_page("page-toggle").unwrap().expect("page");
+        assert!(reloaded.intercept_reporting_enabled);
     }
 }

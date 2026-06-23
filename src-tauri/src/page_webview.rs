@@ -57,6 +57,7 @@ pub fn mount_page_webview(
     page_id: String,
     url: String,
     proxy_port: u16,
+    _intercept_reporting_enabled: bool,
     x: f64,
     y: f64,
     width: f64,
@@ -85,13 +86,20 @@ pub fn mount_page_webview(
     let nav_page_id = page_id.clone();
     let nav_label = label.clone();
 
-    let intercept_script = make_intercept_script(&page_id);
-    let builder = WebviewBuilder::new(&label, WebviewUrl::External(target.clone()))
+    let intercept_reporting_enabled =
+        crate::commands::lookup_page_intercept_reporting(&page_id)?;
+
+    let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(target.clone()))
         .proxy_url(proxy)
         .user_agent(PAGE_WEBVIEW_USER_AGENT)
-        .initialization_script(&intercept_script)
         .focused(true)
-        .zoom_hotkeys_enabled(true)
+        .zoom_hotkeys_enabled(true);
+    if let Some(intercept_script) =
+        intercept_script_if_enabled(intercept_reporting_enabled, &page_id)
+    {
+        builder = builder.initialization_script(&intercept_script);
+    }
+    let builder = builder
         .on_navigation({
             let label = label.clone();
             move |nav_url| {
@@ -371,5 +379,24 @@ mod tests {
         let script = super::make_intercept_script("test");
         assert!(script.contains("text/event-stream"));
         assert!(script.contains("getReader"));
+    }
+
+    #[test]
+    fn intercept_script_optional_when_disabled() {
+        assert!(super::intercept_script_if_enabled(false, "page-1").is_none());
+        let script = super::intercept_script_if_enabled(true, "page-1").expect("script");
+        assert!(script.contains("__APPSCOPE_INTERCEPT_INIT__"));
+        assert!(script.contains("page-1"));
+    }
+}
+
+pub(crate) fn intercept_script_if_enabled(
+    intercept_reporting_enabled: bool,
+    page_id: &str,
+) -> Option<String> {
+    if intercept_reporting_enabled {
+        Some(make_intercept_script(page_id))
+    } else {
+        None
     }
 }

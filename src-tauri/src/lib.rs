@@ -13,7 +13,7 @@ use commands::{
     export_session, generate_certificate, get_certificate_status, get_flow_detail,
     install_certificate, launch_app_command, list_apps, list_flows, list_pages,
     open_certificate_guide, open_page_with_capture, remove_app, remove_certificate, remove_page,
-    save_app, save_page, scan_installed_apps, stop_session,
+    save_app, save_page, scan_installed_apps, set_page_intercept_reporting, stop_session,
 };
 use page_webview::{
     close_page_webview, get_page_webview_url, mount_page_webview,
@@ -27,6 +27,7 @@ pub fn run() {
             scan_installed_apps,
             save_page,
             list_pages,
+            set_page_intercept_reporting,
             remove_page,
             save_app,
             list_apps,

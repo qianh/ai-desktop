@@ -98,6 +98,7 @@ export interface Page {
   letter: string;
   color: string;
   flows: Flow[];
+  interceptReportingEnabled: boolean;
 }
 
 export interface AppEntry {

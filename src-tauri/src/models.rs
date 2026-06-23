@@ -9,6 +9,7 @@ pub struct Page {
     pub browser_app_id: Option<String>,
     pub profile_id: Option<String>,
     pub capture_mode: String,
+    pub intercept_reporting_enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

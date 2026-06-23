@@ -36,6 +36,7 @@ export interface ApiPage {
   name: string;
   url: string;
   status: string;
+  intercept_reporting_enabled: boolean;
 }
 
 export interface ApiApp {
@@ -142,6 +143,7 @@ export function mapApiPage(page: ApiPage): Page {
     letter: pageLetter(page.name),
     color: pageColor(page.id),
     flows: [],
+    interceptReportingEnabled: page.intercept_reporting_enabled,
   };
 }
 
@@ -167,6 +169,13 @@ export async function savePage(name: string | undefined, url: string): Promise<A
 
 export async function listPages(): Promise<ApiPage[]> {
   return call<ApiPage[]>("list_pages");
+}
+
+export async function setPageInterceptReporting(
+  pageId: string,
+  enabled: boolean,
+): Promise<ApiPage> {
+  return call<ApiPage>("set_page_intercept_reporting", { pageId, enabled });
 }
 
 export async function removePage(pageId: string): Promise<void> {
@@ -226,12 +235,22 @@ export async function mountPageWebview(
   pageId: string,
   url: string,
   proxyPort: number,
+  interceptReportingEnabled: boolean,
   x: number,
   y: number,
   width: number,
   height: number
 ): Promise<void> {
-  await call<void>("mount_page_webview", { pageId, url, proxyPort, x, y, width, height });
+  await call<void>("mount_page_webview", {
+    pageId,
+    url,
+    proxyPort,
+    interceptReportingEnabled,
+    x,
+    y,
+    width,
+    height,
+  });
 }
 
 export async function getPageWebviewUrl(pageId: string): Promise<string | null> {

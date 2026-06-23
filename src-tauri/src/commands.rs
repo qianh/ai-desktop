@@ -46,6 +46,7 @@ pub struct PageInfo {
     pub name: String,
     pub url: String,
     pub status: String,
+    pub intercept_reporting_enabled: bool,
 }
 
 struct AppState {
@@ -76,6 +77,17 @@ where
         .lock()
         .map_err(|_| "state lock poisoned".to_string())?;
     f(&mut guard)
+}
+
+/// Authoritative intercept-reporting flag for a page (SQLite).
+pub(crate) fn lookup_page_intercept_reporting(page_id: &str) -> Result<bool, String> {
+    with_state(|state| {
+        let page = state
+            .store
+            .get_page(page_id)?
+            .ok_or_else(|| format!("page not found: {page_id}"))?;
+        Ok(page.intercept_reporting_enabled)
+    })
 }
 
 fn app_to_info(app: &AppEntry) -> AppInfo {
@@ -122,6 +134,7 @@ pub fn save_page(name: Option<String>, url: String) -> Result<PageInfo, String> 
         browser_app_id: None,
         profile_id: None,
         capture_mode: "chrome_session".into(),
+        intercept_reporting_enabled: false,
         created_at: now,
         updated_at: now,
     };
@@ -132,6 +145,7 @@ pub fn save_page(name: Option<String>, url: String) -> Result<PageInfo, String> 
             name: page.name,
             url: page.url,
             status: "idle".into(),
+            intercept_reporting_enabled: false,
         })
     })
 }
@@ -147,8 +161,26 @@ pub fn list_pages() -> Result<Vec<PageInfo>, String> {
                 name: p.name,
                 url: p.url,
                 status: "idle".into(),
+                intercept_reporting_enabled: p.intercept_reporting_enabled,
             })
             .collect())
+    })
+}
+
+#[tauri::command]
+pub fn set_page_intercept_reporting(
+    page_id: String,
+    enabled: bool,
+) -> Result<PageInfo, String> {
+    with_state(|state| {
+        let page = state.store.set_page_intercept_reporting(&page_id, enabled)?;
+        Ok(PageInfo {
+            id: page.id,
+            name: page.name,
+            url: page.url,
+            status: "idle".into(),
+            intercept_reporting_enabled: page.intercept_reporting_enabled,
+        })
     })
 }
 
@@ -403,6 +435,7 @@ mod tests {
             browser_app_id: None,
             profile_id: None,
             capture_mode: "chrome_session".into(),
+            intercept_reporting_enabled: false,
             created_at: now,
             updated_at: now,
         };

@@ -91,12 +91,16 @@ export default function SessionsWorkspace(p: Props) {
             zIndex: LAYER.capture,
           }}
         >
-          {Object.entries(p.sessionMetaByPage).map(([pageId, meta]) => (
+          {Object.entries(p.sessionMetaByPage).map(([pageId, meta]) => {
+            const interceptReportingEnabled =
+              p.pages.find((pg) => pg.id === pageId)?.interceptReportingEnabled ?? false;
+            return (
             <PageBrowser
               key={`${pageId}-${meta.proxyPort}`}
               pageId={pageId}
               url={meta.pageUrl}
               proxyPort={meta.proxyPort}
+              interceptReportingEnabled={interceptReportingEnabled}
               panelState={derivePagePanelState({
                 navMode: p.navMode,
                 activeId: p.activeId,
@@ -110,7 +114,8 @@ export default function SessionsWorkspace(p: Props) {
               onToggleInspector={p.onToggleInspector}
               requestCount={(p.flowsByPage[pageId] || []).length}
             />
-          ))}
+          );
+          })}
           {p.inspectorOpen && chrome.showPageCapture && (
             <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
               {chrome.showFlows ? (
@@ -118,7 +123,8 @@ export default function SessionsWorkspace(p: Props) {
               ) : (
                 <EmptyState busy={p.captureBusy} />
               )}
-              {(p.interceptsByPage[p.activeId]?.length ?? 0) > 0 && (
+              {(p.pages.find((pg) => pg.id === p.activeId)?.interceptReportingEnabled ?? false) &&
+                (p.interceptsByPage[p.activeId]?.length ?? 0) > 0 && (
                 <div style={{ borderTop: "1px solid #ededf0", maxHeight: "40%", overflow: "auto" }}>
                   <div
                     style={{
