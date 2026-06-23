@@ -18,7 +18,45 @@ const NOISE_URL_PATTERNS = [
   /\/stream_status/i,
   /\/init\b/i,
   /\/experimental\//i,
+  /\/conversation\/prepare/i,
+  /\/beacons\//i,
 ];
+
+export function urlPath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url.split("?")[0];
+  }
+}
+
+const CONVERSATION_ID_IN_PATH =
+  /\/conversation\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+
+export function extractConversationIdFromUrl(url: string): string | null {
+  const match = urlPath(url).match(CONVERSATION_ID_IN_PATH);
+  return match?.[1] ?? null;
+}
+
+function conversationTitleFromJson(text: string | null): string | null {
+  if (!text || !text.startsWith("{")) return null;
+  try {
+    const data = JSON.parse(text) as Record<string, unknown>;
+    if (typeof data.title === "string" && data.title.trim()) return data.title.trim();
+  } catch {
+    // not JSON
+  }
+  return null;
+}
+
+export function conversationTitleFromBodies(item: InterceptedFetch): string | null {
+  return conversationTitleFromJson(item.resp_body) ?? conversationTitleFromJson(item.req_body);
+}
+
+/** GET /conversations (plural, list) — not a single chat round. */
+function isConversationListPath(path: string): boolean {
+  return /\/conversations\/?$/i.test(path);
+}
 
 /** ChatGPT internal protocol blobs — not user chat text */
 const NOISE_BODY_PATTERNS = [
@@ -41,6 +79,66 @@ function hasChatMessagesInJson(data: unknown): boolean {
   if (Array.isArray(obj.messages) && obj.messages.length > 0) return true;
   if (obj.mapping && typeof obj.mapping === "object") return true;
   return false;
+}
+
+/** Strict URL/method gate — only endpoints that may carry real chat content. */
+export function isConversationUrlCandidate(item: { url: string; method: string }): boolean {
+  const url = item.url.toLowerCase();
+  if (NOISE_URL_PATTERNS.some((p) => p.test(url))) return false;
+
+  const path = urlPath(item.url).toLowerCase();
+  if (isConversationListPath(path)) return false;
+
+  // POST send message — exact /conversation, not /conversation/prepare etc.
+  if (item.method === "POST" && /\/backend-api\/conversation\/?$/i.test(path)) {
+    return true;
+  }
+
+  if (item.method === "POST" && /\/backend-anon\/conversation\/?$/i.test(path)) {
+    return true;
+  }
+
+  if (item.method === "POST" && /\/api\/conversation\/?$/i.test(path)) {
+    return true;
+  }
+
+  return false;
+}
+
+/** GET load of a single conversation by uuid — exact path only, not /textdocs or /stream_status. */
+export function isConversationGetLoadRow(item: { url: string; method: string }): boolean {
+  if (item.method !== "GET") return false;
+  const url = item.url.toLowerCase();
+  if (NOISE_URL_PATTERNS.some((p) => p.test(url))) return false;
+  const path = urlPath(item.url).toLowerCase();
+  if (isConversationListPath(path)) return false;
+  return /\/backend-api\/conversation\/[0-9a-f-]{36}\/?$/i.test(path);
+}
+
+/** True for POST send-message endpoints (real chat round), not GET page loads. */
+export function isConversationPostRow(item: { url: string; method: string }): boolean {
+  if (item.method !== "POST") return false;
+  const path = urlPath(item.url).toLowerCase();
+  if (NOISE_URL_PATTERNS.some((p) => p.test(item.url.toLowerCase()))) return false;
+  if (isConversationListPath(path)) return false;
+  return (
+    /\/backend-api\/conversation\/?$/i.test(path) ||
+    /\/backend-anon\/conversation\/?$/i.test(path) ||
+    /\/api\/conversation\/?$/i.test(path)
+  );
+}
+
+/** List row: URL/method match is enough; bodies may be loaded on demand in the detail modal. */
+export function isListableConversationRow(item: { url: string; method: string }): boolean {
+  return isConversationPostRow(item) || isConversationGetLoadRow(item);
+}
+
+/** POST rows worth probing in phase 2 for body-heuristic conversation detection. */
+export function isConversationBodyProbeCandidate(item: { url: string; method: string }): boolean {
+  if (item.method !== "POST") return false;
+  const url = item.url.toLowerCase();
+  if (NOISE_URL_PATTERNS.some((p) => p.test(url))) return false;
+  return !isConversationUrlCandidate(item);
 }
 
 export function isConversationIntercept(item: InterceptedFetch): boolean {
@@ -372,10 +470,130 @@ export function parseConversationBodies(item: InterceptedFetch): {
   return { user, assistant, rawReq, rawResp };
 }
 
+/** Fast list preview from URL/method only — no req/resp bodies required. */
+export function conversationMetadataPreview(item: { url: string; method: string }): string {
+  const url = item.url;
+  if (item.method === "POST" && /\/backend-api\/conversation\/?$/i.test(url.split("?")[0])) {
+    return "发送对话消息";
+  }
+  if (item.method === "GET" && /\/backend-api\/conversations?\/[0-9a-f-]{8,}/i.test(url.split("?")[0])) {
+    return "加载对话记录";
+  }
+  if (/\/backend-api\/conversation/i.test(url)) return "对话 API 请求";
+  if (/chatgpt\.com|chat\.openai\.com/i.test(url) && /conversation/i.test(url)) {
+    return "ChatGPT 对话请求";
+  }
+  try {
+    const path = new URL(url).pathname;
+    const segment = path.split("/").filter(Boolean).pop();
+    if (segment) return `${item.method} · ${segment}`;
+  } catch {
+    // ignore invalid URL
+  }
+  return `${item.method} 请求`;
+}
+
+export type InterceptStorageMeta = {
+  isConversation: boolean;
+  previewText: string | null;
+  conversationId: string | null;
+};
+
+/** Classify an intercept at upload time for indexed Supabase list queries. */
+export function classifyInterceptForStorage(item: InterceptedFetch): InterceptStorageMeta {
+  const conversationId = extractConversationIdFromUrl(item.url);
+
+  if (!isListableConversationRow(item)) {
+    return { isConversation: false, previewText: null, conversationId };
+  }
+
+  const isGetLoad = isConversationGetLoadRow(item);
+
+  if (!isGetLoad && !isConversationIntercept(item)) {
+    return { isConversation: false, previewText: null, conversationId };
+  }
+
+  if (isGetLoad && (item.req_body || item.resp_body) && !isConversationIntercept(item)) {
+    return { isConversation: false, previewText: null, conversationId };
+  }
+
+  const { user, assistant, rawReq, rawResp } = parseConversationBodies(item);
+  if (!user && !assistant && !rawReq && !rawResp) {
+    if (isGetLoad) {
+      const preview = conversationTitleFromBodies(item) ?? conversationMetadataPreview(item);
+      const previewText = preview.length > 120 ? `${preview.slice(0, 120)}…` : preview;
+      return { isConversation: true, previewText, conversationId };
+    }
+    return { isConversation: false, previewText: null, conversationId };
+  }
+
+  const title = conversationTitleFromBodies(item);
+  const preview = title ?? user ?? assistant ?? conversationMetadataPreview(item);
+  const previewText = preview.length > 120 ? `${preview.slice(0, 120)}…` : preview;
+
+  return { isConversation: true, previewText, conversationId };
+}
+
 export function conversationPreview(item: InterceptedFetch): string {
-  const { user, assistant } = parseConversationBodies(item);
-  const text = user || assistant;
-  if (text) return text.length > 80 ? text.slice(0, 80) + "…" : text;
-  if (!item.req_body && !item.resp_body) return "（无请求/响应 body）";
-  return "（body 已上报，解析中…）";
+  const stored = item.preview_text?.trim();
+  if (stored) return stored.length > 80 ? stored.slice(0, 80) + "…" : stored;
+
+  if (item.req_body || item.resp_body) {
+    const title = conversationTitleFromBodies(item);
+    if (title) return title.length > 80 ? title.slice(0, 80) + "…" : title;
+
+    const { user, assistant } = parseConversationBodies(item);
+    const text = user || assistant;
+    if (text) return text.length > 80 ? text.slice(0, 80) + "…" : text;
+    if (!item.req_body && !item.resp_body) return "（无请求/响应 body）";
+    return "（body 已上报，解析中…）";
+  }
+  return conversationMetadataPreview(item);
+}
+
+export function conversationIdForRow(row: InterceptedFetch): string | null {
+  if (row.conversation_id) return row.conversation_id;
+  const fromUrl = extractConversationIdFromUrl(row.url);
+  if (fromUrl) return fromUrl;
+  if (!row.req_body?.startsWith("{")) return null;
+  try {
+    const data = JSON.parse(row.req_body) as Record<string, unknown>;
+    if (typeof data.conversation_id === "string" && data.conversation_id) {
+      return data.conversation_id;
+    }
+  } catch {
+    // ignore invalid JSON
+  }
+  return null;
+}
+
+function conversationRowRank(row: InterceptedFetch): number {
+  if (isConversationPostRow(row)) return 3;
+  if (isConversationGetLoadRow(row)) return 2;
+  return 1;
+}
+
+function preferConversationRow(existing: InterceptedFetch, incoming: InterceptedFetch): InterceptedFetch {
+  const existingRank = conversationRowRank(existing);
+  const incomingRank = conversationRowRank(incoming);
+  if (existingRank !== incomingRank) return existingRank > incomingRank ? existing : incoming;
+  return existing.timestamp >= incoming.timestamp ? existing : incoming;
+}
+
+/** Keep the latest intercept per conversation id; prefer POST over GET for the same chat. */
+export function dedupeConversationRows(rows: InterceptedFetch[]): InterceptedFetch[] {
+  const keyed = new Map<string, InterceptedFetch>();
+  const rest: InterceptedFetch[] = [];
+
+  for (const row of rows) {
+    const conversationId = conversationIdForRow(row);
+    if (!conversationId) {
+      rest.push(row);
+      continue;
+    }
+    const prev = keyed.get(conversationId);
+    keyed.set(conversationId, prev ? preferConversationRow(prev, row) : row);
+  }
+
+  return [...keyed.values(), ...rest].sort((a, b) => b.timestamp - a.timestamp);
 }

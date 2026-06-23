@@ -14,6 +14,7 @@ import {
   mapApiPage,
   mapFlowListItem,
   openCertificateGuide,
+  uploadInterceptsToSupabase,
   closePageWebview,
   openPageWithCapture,
   removeApp,
@@ -78,7 +79,7 @@ export default function App() {
   const [deleteAppTarget, setDeleteAppTarget] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [interceptsByPage, setInterceptsByPage] = useState<Record<string, InterceptedFetch[]>>({});
-  const [recordsInvalidate, setRecordsInvalidate] = useState(0);
+
 
   const refreshPages = useCallback(async () => {
     const apiPages = await listPages();
@@ -140,10 +141,13 @@ export default function App() {
   }, [activeId, pages]);
 
   useEffect(() => {
-    const capturingPages = pages.filter((p) => p.status === "capturing" && sessionsByPage[p.id]);
-    if (!capturingPages.length || !recording) return;
+    const pollPages = pages.filter((p) => {
+      if (!sessionsByPage[p.id]) return false;
+      return recording || p.interceptReportingEnabled;
+    });
+    if (!pollPages.length) return;
     const timer = window.setInterval(() => {
-      capturingPages.forEach((p) => {
+      pollPages.forEach((p) => {
         refreshFlowsForPage(p.id).catch((e) =>
           setError(e instanceof Error ? e.message : String(e))
         );
@@ -252,42 +256,59 @@ export default function App() {
   };
 
   const seenInterceptIds = useRef(new Set<string>());
+  const pendingUploadIds = useRef(new Set<string>());
+  const pendingIntercepts = useRef<Array<{ pageId: string; items: InterceptedFetch[] }>>([]);
   const pagesById = useMemo(() => Object.fromEntries(pages.map((p) => [p.id, p])), [pages]);
   const pagesByIdRef = useRef(pagesById);
   pagesByIdRef.current = pagesById;
 
   const handleIntercepts = useCallback((pageId: string, items: InterceptedFetch[]) => {
-    if (!pagesByIdRef.current[pageId]?.interceptReportingEnabled) return;
+    if (!pageId) {
+      console.warn("[appscope][supabase] skip upload: missing page_id in intercept event");
+      return;
+    }
+    const page = pagesByIdRef.current[pageId];
+    if (!page) {
+      pendingIntercepts.current.push({ pageId, items });
+      return;
+    }
+    if (!page.interceptReportingEnabled) {
+      console.warn(
+        `[appscope][supabase] skip upload: reporting disabled for page ${pageId}`,
+      );
+      return;
+    }
 
-    const fresh = items.filter((it) => !seenInterceptIds.current.has(it.id));
+    const fresh = items.filter(
+      (it) => !seenInterceptIds.current.has(it.id) && !pendingUploadIds.current.has(it.id),
+    );
     if (fresh.length === 0) return;
-    for (const it of fresh) seenInterceptIds.current.add(it.id);
+    for (const it of fresh) pendingUploadIds.current.add(it.id);
 
     setInterceptsByPage((prev) => ({
       ...prev,
       [pageId]: [...(prev[pageId] || []), ...fresh],
     }));
-    setRecordsInvalidate((n) => n + 1);
 
     const sbConfig = loadSupabaseConfig();
-    if (sbConfig.url && sbConfig.key) {
-      const rows = fresh.map((item) => ({ ...item, page_id: pageId }));
-      fetch(`${sbConfig.url}/rest/v1/intercepts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: sbConfig.key,
-          Authorization: `Bearer ${sbConfig.key}`,
-          Prefer: "return=minimal",
-        },
-        body: JSON.stringify(rows),
-      })
-        .then((resp) => {
-          if (!resp.ok) resp.text().then((t) => console.error("[appscope][supabase] upload failed:", resp.status, t));
-          else console.log(`[appscope][supabase] uploaded ${rows.length} rows`);
-        })
-        .catch((e) => console.error("[appscope][supabase] fetch error:", e));
+    if (!sbConfig.url || !sbConfig.key) {
+      for (const it of fresh) pendingUploadIds.current.delete(it.id);
+      console.warn("[appscope][supabase] skip upload: Supabase not configured in Settings");
+      return;
     }
+
+    void uploadInterceptsToSupabase(pageId, fresh, sbConfig)
+      .then(() => {
+        for (const it of fresh) {
+          seenInterceptIds.current.add(it.id);
+          pendingUploadIds.current.delete(it.id);
+        }
+        console.log(`[appscope][supabase] uploaded ${fresh.length} rows for page ${pageId}`);
+      })
+      .catch((e) => {
+        for (const it of fresh) pendingUploadIds.current.delete(it.id);
+        console.error("[appscope][supabase] upload failed:", e);
+      });
   }, []);
 
   const handleToggleInterceptReporting = useCallback(
@@ -297,7 +318,9 @@ export default function App() {
       );
       try {
         await setPageInterceptReporting(pageId, enabled);
-        if (!enabled) {
+        if (enabled) {
+          seenInterceptIds.current.clear();
+        } else {
           setInterceptsByPage((prev) => ({ ...prev, [pageId]: [] }));
         }
       } catch (e) {
@@ -325,6 +348,14 @@ export default function App() {
     );
     return () => { unlisten.then((fn) => fn()); };
   }, [handleIntercepts]);
+
+  useEffect(() => {
+    if (!pages.length || pendingIntercepts.current.length === 0) return;
+    const queued = pendingIntercepts.current.splice(0);
+    for (const { pageId, items } of queued) {
+      handleIntercepts(pageId, items);
+    }
+  }, [pages, handleIntercepts]);
 
   const handleStartCaptureForPage = async (pageId: string) => {
     if (captureBusy || sessionMetaByPage[pageId] || captureInFlight.current.has(pageId)) return;
@@ -618,7 +649,6 @@ export default function App() {
                 flowsByPage={flowsByPage}
                 flows={flows}
                 interceptsByPage={interceptsByPage}
-                recordsInvalidate={recordsInvalidate}
                 loading={loading}
                 deleteTargetId={deleteTarget?.id ?? null}
                 overlayOpen={overlayOpen}

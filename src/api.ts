@@ -1,8 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
-import { isConversationIntercept, parseConversationBodies } from "./lib/conversationFilter";
 import {
+  classifyInterceptForStorage,
+  conversationTitleFromBodies,
+  dedupeConversationRows,
+  isConversationGetLoadRow,
+  isConversationIntercept,
+  isListableConversationRow,
+  parseConversationBodies,
+} from "./lib/conversationFilter";
+import {
+  buildInterceptByIdParams,
   buildInterceptsQueryParams,
+  conversationListQueryOptions,
   type ConversationRecordsFilter,
+  type InterceptsQueryOptions,
 } from "./lib/conversationRecordsQuery";
 import type {
   AppEntry,
@@ -363,21 +374,101 @@ export async function exportSession(sessionId: string, format: "json" | "har"): 
 
 export const REPORTED_INTERCEPTS_LIMIT = 200;
 
-/** Fetch more raw rows before client-side conversation filtering. */
-const RAW_INTERCEPTS_FETCH_LIMIT = 1000;
+export async function uploadInterceptsToSupabase(
+  pageId: string,
+  items: InterceptedFetch[],
+  config: SupabaseConfig,
+): Promise<void> {
+  if (!config.url || !config.key || items.length === 0) return;
+
+  const base = config.url.replace(/\/$/, "");
+  const rows = items.map((item) => {
+    const meta = classifyInterceptForStorage(item);
+    return {
+      ...item,
+      page_id: pageId,
+      preview_text: meta.previewText,
+      is_conversation: meta.isConversation,
+      conversation_id: meta.conversationId,
+    };
+  });
+  const resp = await fetch(`${base}/rest/v1/intercepts`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: config.key,
+      Authorization: `Bearer ${config.key}`,
+      Prefer: "resolution=merge-duplicates,return=minimal",
+    },
+    body: JSON.stringify(rows),
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`Supabase ${resp.status}${text ? `: ${text}` : ""}`);
+  }
+}
+
+export type ConversationTruncationReason = "scan_limit" | "display_cap" | "candidate_cap";
 
 export type FilteredConversationResult = {
   rows: InterceptedFetch[];
   truncated: boolean;
+  truncationReason: ConversationTruncationReason | null;
 };
 
+const RAW_INTERCEPTS_FETCH_LIMIT = 1000;
+
+type ListFetchMode = "lean" | "legacy";
+
+function listRowToIntercept(row: InterceptedFetch): InterceptedFetch {
+  return {
+    ...row,
+    req_headers: row.req_headers ?? {},
+    resp_headers: row.resp_headers ?? {},
+    req_body: row.req_body ?? null,
+    resp_body: row.resp_body ?? null,
+    status: row.status ?? 0,
+    duration_ms: row.duration_ms ?? 0,
+  };
+}
+
+/** Epoch seconds (e.g. 1.7e9) → ms; already-ms values pass through. */
+export function normalizeInterceptTimestamp(ts: number): number {
+  if (!Number.isFinite(ts)) return ts;
+  if (ts > 0 && ts < 1e12) return ts * 1000;
+  return ts;
+}
+
+function normalizeInterceptRows(rows: InterceptedFetch[]): InterceptedFetch[] {
+  return rows.map((row) => ({
+    ...row,
+    timestamp: normalizeInterceptTimestamp(row.timestamp),
+  }));
+}
+
+function applyClientTimeFilter(
+  rows: InterceptedFetch[],
+  filter: ConversationRecordsFilter,
+): InterceptedFetch[] {
+  return rows.filter((row) => {
+    if (filter.timeFromMs != null && row.timestamp < filter.timeFromMs) return false;
+    if (filter.timeToMs != null && row.timestamp > filter.timeToMs) return false;
+    return true;
+  });
+}
+
 function capConversationRows(rawRows: InterceptedFetch[]): FilteredConversationResult {
-  const filtered = filterConversationRows(rawRows);
-  const truncated =
-    filtered.length > REPORTED_INTERCEPTS_LIMIT || rawRows.length >= RAW_INTERCEPTS_FETCH_LIMIT;
+  const filtered = dedupeConversationRows(filterConversationRows(rawRows));
+  let truncationReason: ConversationTruncationReason | null = null;
+  if (rawRows.length >= RAW_INTERCEPTS_FETCH_LIMIT) {
+    truncationReason = "scan_limit";
+  } else if (filtered.length > REPORTED_INTERCEPTS_LIMIT) {
+    truncationReason = "display_cap";
+  }
   return {
     rows: filtered.slice(0, REPORTED_INTERCEPTS_LIMIT),
-    truncated,
+    truncated: truncationReason !== null,
+    truncationReason,
   };
 }
 
@@ -409,10 +500,99 @@ async function fetchInterceptsFromSupabase(
 
 function filterConversationRows(rows: InterceptedFetch[]): InterceptedFetch[] {
   return rows.filter((r) => {
+    if (r.is_conversation === true) return true;
+    if (r.is_conversation === false) {
+      if (isListableConversationRow(r)) {
+        if (isConversationGetLoadRow(r)) return true;
+        if (isConversationIntercept(r)) return true;
+      }
+      return false;
+    }
     if (!isConversationIntercept(r)) return false;
+    if (conversationTitleFromBodies(r)) return true;
     const { user, assistant, rawReq, rawResp } = parseConversationBodies(r);
     return Boolean(user || assistant || rawReq || rawResp);
   });
+}
+
+function isLeanListSchemaError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    /\bSupabase 400\b/.test(error.message) &&
+    /preview_text|is_conversation|conversation_id|column/i.test(error.message)
+  );
+}
+
+function hasTimeFilter(filter: ConversationRecordsFilter): boolean {
+  return filter.timeFromMs != null || filter.timeToMs != null;
+}
+
+async function loadInterceptRows(
+  filter: ConversationRecordsFilter,
+  allPageIds: string[],
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+  mode: ListFetchMode = "lean",
+): Promise<InterceptedFetch[]> {
+  const options: InterceptsQueryOptions | number =
+    mode === "lean"
+      ? conversationListQueryOptions(RAW_INTERCEPTS_FETCH_LIMIT)
+      : RAW_INTERCEPTS_FETCH_LIMIT;
+  const params = buildInterceptsQueryParams(filter, allPageIds, options);
+  const rows = await fetchInterceptsFromSupabase(params, config, signal);
+  return rows.map(listRowToIntercept);
+}
+
+async function loadConversationListRows(
+  filter: ConversationRecordsFilter,
+  allPageIds: string[],
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<{ rows: InterceptedFetch[]; mode: ListFetchMode }> {
+  try {
+    const rows = await loadInterceptRows(filter, allPageIds, config, signal, "lean");
+    if (rows.length > 0) return { rows, mode: "lean" };
+    if (!hasTimeFilter(filter)) {
+      const legacy = await loadInterceptRows(filter, allPageIds, config, signal, "legacy");
+      if (legacy.length > 0) return { rows: legacy, mode: "legacy" };
+    }
+    return { rows, mode: "lean" };
+  } catch (error) {
+    if (isLeanListSchemaError(error)) {
+      const legacy = await loadInterceptRows(filter, allPageIds, config, signal, "legacy");
+      return { rows: legacy, mode: "legacy" };
+    }
+    throw error;
+  }
+}
+
+async function fetchAndFilterConversationRows(
+  filter: ConversationRecordsFilter,
+  allPageIds: string[],
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<FilteredConversationResult> {
+  try {
+    let { rows: rawRows } = await loadConversationListRows(filter, allPageIds, config, signal);
+    let normalized = normalizeInterceptRows(rawRows);
+    let timeFiltered = applyClientTimeFilter(normalized, filter);
+
+    if (timeFiltered.length === 0 && hasTimeFilter(filter)) {
+      ({ rows: rawRows } = await loadConversationListRows(
+        { ...filter, timeFromMs: null, timeToMs: null },
+        allPageIds,
+        config,
+        signal,
+      ));
+      normalized = normalizeInterceptRows(rawRows);
+      timeFiltered = applyClientTimeFilter(normalized, filter);
+    }
+
+    return capConversationRows(timeFiltered);
+  } catch (error) {
+    if (filter.pageId || !isInFilterFallbackError(error)) throw error;
+    return fetchPerPageMerged(filter, allPageIds, config, signal);
+  }
 }
 
 export async function fetchReportedIntercepts(
@@ -443,15 +623,42 @@ async function fetchPerPageMerged(
   config: SupabaseConfig,
   signal?: AbortSignal,
 ): Promise<FilteredConversationResult> {
-  const perPage = await Promise.all(
-    allPageIds.map(async (pageId) => {
-      const single = { ...filter, pageId };
-      const params = buildInterceptsQueryParams(single, allPageIds, RAW_INTERCEPTS_FETCH_LIMIT);
-      return fetchInterceptsFromSupabase(params, config, signal);
-    }),
-  );
-  const merged = perPage.flat().sort((a, b) => b.timestamp - a.timestamp);
-  return capConversationRows(merged);
+  async function loadRows(timeFilter: ConversationRecordsFilter): Promise<InterceptedFetch[]> {
+    const perPage = await Promise.all(
+      allPageIds.map(async (pageId) => {
+        const { rows } = await loadConversationListRows(
+          { ...timeFilter, pageId },
+          allPageIds,
+          config,
+          signal,
+        );
+        return rows;
+      }),
+    );
+    return perPage.flat().sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  let rawRows = await loadRows(filter);
+  let normalized = normalizeInterceptRows(rawRows);
+  let timeFiltered = applyClientTimeFilter(normalized, filter);
+
+  if (timeFiltered.length === 0 && hasTimeFilter(filter)) {
+    const noTime = { ...filter, timeFromMs: null, timeToMs: null };
+    rawRows = await loadRows(noTime);
+    normalized = normalizeInterceptRows(rawRows);
+    timeFiltered = applyClientTimeFilter(normalized, filter);
+  }
+
+  return capConversationRows(timeFiltered);
+}
+
+export async function fetchInterceptById(
+  id: string,
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<InterceptedFetch | null> {
+  const rows = await fetchInterceptsFromSupabase(buildInterceptByIdParams(id), config, signal);
+  return rows[0] ?? null;
 }
 
 export async function fetchFilteredConversationIntercepts(
@@ -460,23 +667,5 @@ export async function fetchFilteredConversationIntercepts(
   config: SupabaseConfig,
   signal?: AbortSignal,
 ): Promise<FilteredConversationResult> {
-  if (!filter.pageId && allPageIds.length === 0) {
-    return { rows: [], truncated: false };
-  }
-
-  if (filter.pageId) {
-    const params = buildInterceptsQueryParams(filter, allPageIds, RAW_INTERCEPTS_FETCH_LIMIT);
-    const rows = await fetchInterceptsFromSupabase(params, config, signal);
-    return capConversationRows(rows);
-  }
-
-  try {
-    const params = buildInterceptsQueryParams(filter, allPageIds, RAW_INTERCEPTS_FETCH_LIMIT);
-    const rows = await fetchInterceptsFromSupabase(params, config, signal);
-    return capConversationRows(rows);
-  } catch (error) {
-    if (!isInFilterFallbackError(error)) throw error;
-    return fetchPerPageMerged(filter, allPageIds, config, signal);
-  }
+  return fetchAndFilterConversationRows(filter, allPageIds, config, signal);
 }
-

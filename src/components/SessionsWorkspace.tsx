@@ -24,7 +24,7 @@ type Props = {
   flowsByPage: Record<string, Flow[]>;
   flows: Flow[];
   interceptsByPage: Record<string, InterceptedFetch[]>;
-  recordsInvalidate: number;
+
   loading: boolean;
   deleteTargetId: string | null;
   overlayOpen: boolean;
@@ -158,7 +158,7 @@ export default function SessionsWorkspace(p: Props) {
           background: "#ffffff",
         }}
       >
-        <SessionRecordsView pages={p.pages} invalidateKey={p.recordsInvalidate} />
+        <SessionRecordsView pages={p.pages} />
       </div>
 
       {chrome.showApp && p.active && "bundle" in p.active && (

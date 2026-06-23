@@ -1,9 +1,8 @@
 import { useMemo, useState, type CSSProperties } from "react";
-import { REPORTED_INTERCEPTS_LIMIT } from "../api";
+import { REPORTED_INTERCEPTS_LIMIT, type ConversationTruncationReason } from "../api";
 import { formatTimestamp } from "../lib/format";
 import { conversationPreview } from "../lib/conversationFilter";
 import {
-  defaultPastWeekRange,
   draftToFilter,
   validateTimeRange,
   type ConversationRecordsFilter,
@@ -17,7 +16,6 @@ import SessionRecordModal from "./modals/SessionRecordModal";
 
 type Props = {
   pages: Page[];
-  invalidateKey: number;
 };
 
 const fieldLabel: CSSProperties = {
@@ -73,6 +71,19 @@ const ghostBtn: CSSProperties = {
   height: 32,
 };
 
+function truncationHint(reason: ConversationTruncationReason | null): string {
+  switch (reason) {
+    case "scan_limit":
+      return "已扫描大量记录，可能还有更多未显示";
+    case "candidate_cap":
+      return "匹配记录过多，部分未加载";
+    case "display_cap":
+      return `仅显示最近 ${REPORTED_INTERCEPTS_LIMIT} 条`;
+    default:
+      return `仅显示最近 ${REPORTED_INTERCEPTS_LIMIT} 条`;
+  }
+}
+
 const queryBtn = (loading: boolean): CSSProperties => ({
   ...primaryBtn,
   fontSize: 12.5,
@@ -96,7 +107,7 @@ function SessionRecordsList({
   onClearTimeRange,
   onQuery,
   filterError,
-  invalidateKey,
+  supabaseConfig,
 }: {
   pages: Page[];
   appliedFilter: ConversationRecordsFilter;
@@ -110,18 +121,17 @@ function SessionRecordsList({
   onClearTimeRange: () => void;
   onQuery: () => void;
   filterError: string | null;
-  invalidateKey: number;
+  supabaseConfig: ReturnType<typeof loadSupabaseConfig>;
 }) {
   const [selectedRecord, setSelectedRecord] = useState<InterceptedFetch | null>(null);
   const pagesKey = pageListIdentityKey(pages);
   const pageIds = useMemo(() => pages.map((p) => p.id), [pagesKey]);
   const pageById = useMemo(() => Object.fromEntries(pages.map((p) => [p.id, p])), [pages]);
-  const { items, loading, error, truncated } = useConversationRecords(
+  const { items, loading, error, truncated, truncationReason } = useConversationRecords(
     appliedFilter,
     pageIds,
     pagesKey,
     queryToken,
-    invalidateKey,
   );
 
   const hasDraftTime = draftTimeFrom.trim() !== "" || draftTimeTo.trim() !== "";
@@ -158,7 +168,7 @@ function SessionRecordsList({
               {queryToken < 1 ? "请设置条件后查询" : loading ? "查询中…" : `${items.length} 条对话记录`}
             </span>
             {!loading && queryToken >= 1 && truncated && (
-              <span style={{ color: "#c97b20" }}>仅显示最近 {REPORTED_INTERCEPTS_LIMIT} 条</span>
+              <span style={{ color: "#c97b20" }}>{truncationHint(truncationReason)}</span>
             )}
           </div>
         </div>
@@ -310,7 +320,11 @@ function SessionRecordsList({
               💬
             </div>
             <div style={{ fontWeight: 500, color: "#5a5a5e" }}>暂无符合条件的对话记录</div>
-            <div style={{ fontSize: 12, marginTop: 6 }}>可调整 Page 或时间范围后重新查询</div>
+            <div style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>
+              会话记录只显示 ChatGPT 对话请求（如 /backend-api/conversation），不含统计、配置类请求。
+              <br />
+              可尝试：选「全部 Page」、点「清除时间」后重新查询。
+            </div>
           </div>
         )}
         {!loading &&
@@ -411,25 +425,27 @@ function SessionRecordsList({
             backdropFilter: "blur(1.5px)",
           }}
         >
-          <SessionRecordModal record={selectedRecord} onClose={() => setSelectedRecord(null)} />
+          <SessionRecordModal
+            record={selectedRecord}
+            config={supabaseConfig}
+            onClose={() => setSelectedRecord(null)}
+          />
         </div>
       )}
     </div>
   );
 }
 
-export default function SessionRecordsView({ pages, invalidateKey }: Props) {
+export default function SessionRecordsView({ pages }: Props) {
   const config = useMemo(() => loadSupabaseConfig(), []);
   const unconfigured = !config.url || !config.key;
 
-  const defaultRange = useMemo(() => defaultPastWeekRange(), []);
-
   const [draftPageId, setDraftPageId] = useState<string | null>(null);
-  const [draftTimeFrom, setDraftTimeFrom] = useState(defaultRange.from);
-  const [draftTimeTo, setDraftTimeTo] = useState(defaultRange.to);
+  const [draftTimeFrom, setDraftTimeFrom] = useState("");
+  const [draftTimeTo, setDraftTimeTo] = useState("");
 
   const [appliedFilter, setAppliedFilter] = useState<ConversationRecordsFilter>(() =>
-    draftToFilter(null, defaultRange.from, defaultRange.to),
+    draftToFilter(null, "", ""),
   );
   const [queryToken, setQueryToken] = useState(1);
   const [filterError, setFilterError] = useState<string | null>(null);
@@ -499,7 +515,7 @@ export default function SessionRecordsView({ pages, invalidateKey }: Props) {
       }}
       onQuery={runQuery}
       filterError={filterError}
-      invalidateKey={invalidateKey}
+      supabaseConfig={config}
     />
   );
 }

@@ -53,6 +53,8 @@ struct AppState {
     store: FlowStore,
     paths: AppScopePaths,
     proxies: HashMap<String, ProxyRuntime>,
+    /// Last processed physical line in each session event file for js_intercept emits.
+    intercept_sync_lines: HashMap<String, usize>,
 }
 
 static STATE: OnceLock<Mutex<AppState>> = OnceLock::new();
@@ -65,6 +67,7 @@ fn state_mutex() -> &'static Mutex<AppState> {
             store,
             paths,
             proxies: HashMap::new(),
+            intercept_sync_lines: HashMap::new(),
         })
     })
 }
@@ -163,6 +166,12 @@ pub fn set_page_intercept_reporting(
 ) -> Result<PageInfo, String> {
     with_state(|state| {
         let page = state.store.set_page_intercept_reporting(&page_id, enabled)?;
+        if enabled {
+            let session_ids = state.store.page_session_ids(&page_id)?;
+            for session_id in session_ids {
+                state.intercept_sync_lines.remove(&session_id);
+            }
+        }
         Ok(PageInfo {
             id: page.id,
             name: page.name,
@@ -185,7 +194,14 @@ pub fn remove_page(page_id: String) -> Result<(), String> {
         for session_id in session_ids {
             if let Some(proxy) = state.proxies.remove(&session_id) {
                 let event_file = proxy.event_file.clone();
-                let _ = sync_event_file(&state.store, &session_id, &event_file, None);
+                let _ = sync_event_file(
+                    &state.store,
+                    &session_id,
+                    &event_file,
+                    None,
+                    None,
+                );
+                state.intercept_sync_lines.remove(&session_id);
                 proxy.stop();
             }
         }
@@ -286,7 +302,13 @@ pub fn open_page_with_capture_core(page_id: &str) -> Result<SessionInfo, String>
 
         // Best-effort initial sync after short delay for first navigation.
         std::thread::sleep(std::time::Duration::from_millis(300));
-        let _ = sync_event_file(&state.store, &session_id, &event_file, None);
+        let _ = sync_event_file(
+            &state.store,
+            &session_id,
+            &event_file,
+            None,
+            None,
+        );
 
         Ok(SessionInfo {
             id: session_id,
@@ -303,7 +325,14 @@ pub fn stop_session(session_id: String) -> Result<(), String> {
     with_state(|state| {
         if let Some(proxy) = state.proxies.remove(&session_id) {
             let event_file = proxy.event_file.clone();
-            let _ = sync_event_file(&state.store, &session_id, &event_file, None);
+            let _ = sync_event_file(
+                &state.store,
+                &session_id,
+                &event_file,
+                None,
+                None,
+            );
+            state.intercept_sync_lines.remove(&session_id);
             proxy.stop();
         }
         if let Some(mut session) = state.store.get_session(&session_id)? {
@@ -320,7 +349,17 @@ pub fn stop_session(session_id: String) -> Result<(), String> {
 pub fn list_flows(app: tauri::AppHandle, session_id: String) -> Result<Vec<serde_json::Value>, String> {
     with_state(|state| {
         if let Some(proxy) = state.proxies.get(&session_id) {
-            let _ = sync_event_file(&state.store, &session_id, &proxy.event_file, Some(&app));
+            let line_cursor = state
+                .intercept_sync_lines
+                .entry(session_id.clone())
+                .or_insert(0);
+            let _ = sync_event_file(
+                &state.store,
+                &session_id,
+                &proxy.event_file,
+                Some(&app),
+                Some(line_cursor),
+            );
         }
         let flows = state.store.list_flows(&session_id)?;
         flows
@@ -401,6 +440,7 @@ mod tests {
             store,
             paths,
             proxies: HashMap::new(),
+            intercept_sync_lines: HashMap::new(),
         }));
     }
 

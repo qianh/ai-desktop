@@ -218,21 +218,36 @@ pub fn flow_event_to_flow(event: &ProxyFlowEvent, session_id: &str) -> Flow {
     }
 }
 
+fn count_physical_lines(event_file: &Path) -> Result<usize, String> {
+    let file = std::fs::File::open(event_file).map_err(|e| e.to_string())?;
+    Ok(BufReader::new(file).lines().count())
+}
+
 pub fn sync_event_file(
     store: &FlowStore,
     session_id: &str,
     event_file: &Path,
     app: Option<&AppHandle>,
+    mut intercept_line_cursor: Option<&mut usize>,
 ) -> Result<usize, String> {
     if !event_file.exists() {
         return Ok(0);
     }
 
+    if let Some(cursor) = intercept_line_cursor.as_deref_mut() {
+        let total_lines = count_physical_lines(event_file)?;
+        if *cursor > total_lines {
+            *cursor = 0;
+        }
+    }
+
     let file = std::fs::File::open(event_file).map_err(|e| e.to_string())?;
     let reader = BufReader::new(file);
     let mut count = 0usize;
+    let mut physical_line = 0usize;
 
     for line in reader.lines() {
+        physical_line += 1;
         let line = line.map_err(|e| e.to_string())?;
         let trimmed = line.trim();
         if trimmed.is_empty() {
@@ -243,17 +258,44 @@ pub fn sync_event_file(
             .map_err(|e| format!("invalid event json: {e}"))?;
 
         if raw.get("_type").and_then(|v| v.as_str()) == Some("js_intercept") {
-            if let Some(app) = app {
-                let page_id = raw.get("page_id").and_then(|v| v.as_str()).unwrap_or("");
-                let items_json = raw.get("items_json").and_then(|v| v.as_str()).unwrap_or("[]");
-                if let Ok(items) = serde_json::from_str::<Vec<serde_json::Value>>(items_json) {
-                    if !items.is_empty() {
-                        let _ = app.emit("page-content-intercept", serde_json::json!({
-                            "page_id": page_id,
-                            "items": items,
-                        }));
+            let emit = match intercept_line_cursor.as_ref() {
+                Some(cursor) => physical_line > **cursor,
+                None => app.is_some(),
+            };
+            if emit {
+                if let Some(app) = app {
+                    let page_id = raw.get("page_id").and_then(|v| v.as_str()).unwrap_or("");
+                    let reporting_enabled = if page_id.is_empty() {
+                        false
+                    } else {
+                        store
+                            .get_page(page_id)
+                            .ok()
+                            .flatten()
+                            .map(|page| page.intercept_reporting_enabled)
+                            .unwrap_or(false)
+                    };
+                    if reporting_enabled {
+                        let items_json =
+                            raw.get("items_json").and_then(|v| v.as_str()).unwrap_or("[]");
+                        if let Ok(items) =
+                            serde_json::from_str::<Vec<serde_json::Value>>(items_json)
+                        {
+                            if !items.is_empty() {
+                                let _ = app.emit(
+                                    "page-content-intercept",
+                                    serde_json::json!({
+                                        "page_id": page_id,
+                                        "items": items,
+                                    }),
+                                );
+                            }
+                        }
                     }
                 }
+            }
+            if let Some(cursor) = intercept_line_cursor.as_deref_mut() {
+                *cursor = physical_line;
             }
             count += 1;
             continue;
@@ -425,11 +467,93 @@ mod tests {
         let line = r#"{"id":"flow-stable-1","method":"GET","url":"http://127.0.0.1:8080/","scheme":"http","host":"127.0.0.1","path":"/","status_code":200,"req_headers":[],"resp_headers":[]}"#;
         std::fs::write(&event_file, format!("{line}\n")).unwrap();
 
-        sync_event_file(&store, session_id, &event_file, None).unwrap();
-        sync_event_file(&store, session_id, &event_file, None).unwrap();
+        sync_event_file(&store, session_id, &event_file, None, None).unwrap();
+        sync_event_file(&store, session_id, &event_file, None, None).unwrap();
         let flows = store.list_flows(session_id).unwrap();
         assert_eq!(flows.len(), 1);
         assert_eq!(flows[0].id, "flow-stable-1");
+    }
+
+    #[test]
+    fn sync_event_file_js_intercept_requires_reporting_enabled() {
+        let dir = tempdir().unwrap();
+        let paths = AppScopePaths::new(dir.path());
+        let store = FlowStore::open(&paths).unwrap();
+        let now = Utc::now();
+        store
+            .save_page(&crate::models::Page {
+                id: "page-off".into(),
+                name: "Off".into(),
+                url: "https://example.com/".into(),
+                browser_app_id: None,
+                profile_id: None,
+                capture_mode: "chrome_session".into(),
+                intercept_reporting_enabled: false,
+                created_at: now,
+                updated_at: now,
+            })
+            .unwrap();
+
+        let event_file = dir.path().join("events.jsonl");
+        let intercept_line = r#"{"_type":"js_intercept","page_id":"page-off","items_json":"[{\"id\":\"i1\"}]"}"#;
+        std::fs::write(&event_file, format!("{intercept_line}\n")).unwrap();
+
+        let session_id = "sess-reporting-gate";
+        let mut cursor = 0usize;
+        let count = sync_event_file(
+            &store,
+            session_id,
+            &event_file,
+            None,
+            Some(&mut cursor),
+        )
+        .unwrap();
+        assert_eq!(count, 1);
+        assert_eq!(cursor, 1);
+    }
+
+    #[test]
+    fn sync_event_file_js_intercept_cursor_resets_on_file_shrink() {
+        let dir = tempdir().unwrap();
+        let event_file = dir.path().join("events.jsonl");
+        let intercept_line = r#"{"_type":"js_intercept","page_id":"page-1","items_json":"[{\"id\":\"i1\",\"timestamp\":1,\"url\":\"https://example.com\",\"method\":\"GET\",\"req_headers\":{},\"req_body\":null,\"status\":200,\"resp_headers\":{},\"resp_body\":null,\"duration_ms\":1}]"}"#;
+        std::fs::write(&event_file, format!("{intercept_line}\n")).unwrap();
+
+        let paths = AppScopePaths::new(dir.path());
+        let store = FlowStore::open(&paths).unwrap();
+        let session_id = "sess-intercept-shrink";
+        let mut cursor = 5000usize;
+
+        let count =
+            sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor)).unwrap();
+        assert_eq!(count, 1);
+        assert_eq!(cursor, 1);
+    }
+
+    #[test]
+    fn sync_event_file_js_intercept_cursor_skips_reemit() {
+        let dir = tempdir().unwrap();
+        let event_file = dir.path().join("events.jsonl");
+        let intercept_line = r#"{"_type":"js_intercept","page_id":"page-1","items_json":"[{\"id\":\"i1\",\"timestamp\":1,\"url\":\"https://example.com\",\"method\":\"GET\",\"req_headers\":{},\"req_body\":null,\"status\":200,\"resp_headers\":{},\"resp_body\":null,\"duration_ms\":1}]"}"#;
+        std::fs::write(&event_file, format!("{intercept_line}\n")).unwrap();
+
+        let paths = AppScopePaths::new(dir.path());
+        let store = FlowStore::open(&paths).unwrap();
+        let session_id = "sess-intercept";
+        let mut cursor = 0usize;
+
+        sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor)).unwrap();
+        assert_eq!(cursor, 1);
+
+        std::fs::write(
+            &event_file,
+            format!("{intercept_line}\n{intercept_line}\n"),
+        )
+        .unwrap();
+        let count =
+            sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor)).unwrap();
+        assert_eq!(count, 2);
+        assert_eq!(cursor, 2);
     }
 
     #[test]
@@ -458,7 +582,7 @@ mod tests {
         let line = r#"{"method":"GET","url":"http://127.0.0.1:8080/","scheme":"http","host":"127.0.0.1","path":"/","status_code":200,"req_headers":[],"resp_headers":[],"resp_body_preview":"ok"}"#;
         std::fs::write(&event_file, format!("{line}\n")).unwrap();
 
-        let count = sync_event_file(&store, session_id, &event_file, None).unwrap();
+        let count = sync_event_file(&store, session_id, &event_file, None, None).unwrap();
         assert_eq!(count, 1);
         let flows = store.list_flows(session_id).unwrap();
         assert_eq!(flows.len(), 1);

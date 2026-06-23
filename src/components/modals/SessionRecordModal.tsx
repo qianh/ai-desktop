@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
+import { fetchInterceptById } from "../../api";
 import { formatTimestamp } from "../../lib/format";
 import { parseConversationBodies } from "../../lib/conversationFilter";
+import { loadSupabaseConfig, type SupabaseConfig } from "../../lib/supabase";
 import { truncateBody } from "../../lib/truncate";
 import { ACCENT } from "../../lib/ui";
 import type { InterceptedFetch } from "../../types";
 
+function hasAnyBody(record: InterceptedFetch): boolean {
+  return record.req_body != null || record.resp_body != null;
+}
+
 type Props = {
   record: InterceptedFetch;
+  config?: SupabaseConfig;
   onClose: () => void;
 };
 
@@ -72,9 +79,18 @@ function Bubble({
   );
 }
 
-export default function SessionRecordModal({ record, onClose }: Props) {
-  const { user, assistant, rawReq, rawResp } = parseConversationBodies(record);
-  const urlShort = record.url.length > 72 ? record.url.slice(0, 72) + "…" : record.url;
+export default function SessionRecordModal({ record: initialRecord, config, onClose }: Props) {
+  const [record, setRecord] = useState<InterceptedFetch | null>(
+    hasAnyBody(initialRecord) ? initialRecord : null,
+  );
+  const [loading, setLoading] = useState(!hasAnyBody(initialRecord));
+  const [error, setError] = useState<string | null>(null);
+  const resolvedConfig = config ?? loadSupabaseConfig();
+  const display = record ?? initialRecord;
+  const bodies = display.req_body != null || display.resp_body != null
+    ? parseConversationBodies(display)
+    : null;
+  const urlShort = display.url.length > 72 ? display.url.slice(0, 72) + "…" : display.url;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -83,6 +99,57 @@ export default function SessionRecordModal({ record, onClose }: Props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  useEffect(() => {
+    if (hasAnyBody(initialRecord)) {
+      setRecord(initialRecord);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+    setRecord(null);
+    setLoading(true);
+    setError(null);
+  }, [initialRecord.id, initialRecord.req_body, initialRecord.resp_body]);
+
+  useEffect(() => {
+    if (hasAnyBody(initialRecord)) return;
+
+    if (!resolvedConfig.url || !resolvedConfig.key) {
+      setLoading(false);
+      setError("未配置 Supabase");
+      return;
+    }
+
+    const ac = new AbortController();
+    setLoading(true);
+    setError(null);
+    setRecord(null);
+
+    fetchInterceptById(initialRecord.id, resolvedConfig, ac.signal)
+      .then((row) => {
+        if (ac.signal.aborted) return;
+        if (!row) {
+          setError("记录不存在或已被删除");
+          return;
+        }
+        setRecord({
+          ...row,
+          req_body: row.req_body ?? initialRecord.req_body,
+          resp_body: row.resp_body ?? initialRecord.resp_body,
+        });
+      })
+      .catch((e) => {
+        if (ac.signal.aborted) return;
+        if (e instanceof Error && e.name === "AbortError") return;
+        setError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!ac.signal.aborted) setLoading(false);
+      });
+
+    return () => ac.abort();
+  }, [initialRecord.id, initialRecord.req_body, initialRecord.resp_body, resolvedConfig.url, resolvedConfig.key]);
 
   return (
     <div
@@ -113,7 +180,7 @@ export default function SessionRecordModal({ record, onClose }: Props) {
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: "#1d1d1f" }}>对话详情</div>
           <div style={{ fontSize: 11, color: "#9a9aa0", marginTop: 2 }}>
-            {formatTimestamp(record.timestamp)} · {record.method} · {urlShort}
+            {formatTimestamp(display.timestamp)} · {display.method} · {urlShort}
           </div>
         </div>
         <button
@@ -137,16 +204,26 @@ export default function SessionRecordModal({ record, onClose }: Props) {
       </div>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px 20px" }}>
-        {user && <Bubble role="user" label="用户" body={user} />}
-        {assistant && <Bubble role="assistant" label="AI" body={assistant} />}
-        {!user && !assistant && rawReq && (
-          <Bubble role="user" label="请求体（未识别为对话）" body={rawReq} />
+        {loading && (
+          <div style={{ fontSize: 12, color: "#9a9aa0" }}>加载对话内容…</div>
         )}
-        {!user && !assistant && rawResp && (
-          <Bubble role="assistant" label="响应体（未识别为对话）" body={rawResp} />
+        {error && !loading && (
+          <div style={{ fontSize: 12, color: "#d23b30" }}>{error}</div>
         )}
-        {!user && !assistant && !rawReq && !rawResp && (
-          <div style={{ fontSize: 12, color: "#9a9aa0" }}>（无请求/响应 body）</div>
+        {!loading && !error && bodies && (
+          <>
+            {bodies.user && <Bubble role="user" label="用户" body={bodies.user} />}
+            {bodies.assistant && <Bubble role="assistant" label="AI" body={bodies.assistant} />}
+            {!bodies.user && !bodies.assistant && bodies.rawReq && (
+              <Bubble role="user" label="请求体（未识别为对话）" body={bodies.rawReq} />
+            )}
+            {!bodies.user && !bodies.assistant && bodies.rawResp && (
+              <Bubble role="assistant" label="响应体（未识别为对话）" body={bodies.rawResp} />
+            )}
+            {!bodies.user && !bodies.assistant && !bodies.rawReq && !bodies.rawResp && (
+              <div style={{ fontSize: 12, color: "#9a9aa0" }}>（无请求/响应 body）</div>
+            )}
+          </>
         )}
       </div>
     </div>

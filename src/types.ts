@@ -124,6 +124,12 @@ export interface InterceptedFetch {
   resp_body: string | null;
   duration_ms: number;
   error?: string;
+  /** List preview extracted at upload time (title, user snippet, etc.). */
+  preview_text?: string | null;
+  /** Set at upload via classifyInterceptForStorage. */
+  is_conversation?: boolean | null;
+  /** ChatGPT conversation uuid when detectable. */
+  conversation_id?: string | null;
 }
 
 export interface AppData {

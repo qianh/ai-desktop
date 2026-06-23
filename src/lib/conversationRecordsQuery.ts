@@ -59,29 +59,126 @@ export function quotePostgrestId(id: string): string {
   return `"${id.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+/** PostgREST or=(...) value — likely conversation endpoints (pushed to DB). */
+export const CONVERSATION_URL_OR_VALUE =
+  "(and(method.eq.POST,url.ilike.*/backend-api/conversation),and(method.eq.GET,url.ilike.*/backend-api/conversation/*),url.ilike.*/backend-api/conversation/*,url.ilike.*/backend-anon/conversation/*,url.ilike.*/api/conversation/*,url.ilike.*chatgpt.com*conversation*,url.ilike.*chat.openai.com*conversation*)";
+
+/** POST sends + GET single-conversation loads (historical data is often GET-only). */
+export const STRICT_CONVERSATION_URL_OR_VALUE =
+  "(and(method.eq.POST,url.ilike.*/backend-api/conversation),and(method.eq.GET,url.ilike.*/backend-api/conversation/*),and(method.eq.POST,url.ilike.*/backend-anon/conversation),and(method.eq.POST,url.ilike.*/api/conversation))";
+
+/** PostgREST not.or=(...) value — exclude known analytics/noise URLs at query time. */
+export const NOISE_URL_NOT_OR_VALUE =
+  "(url.ilike.*analytics*,url.ilike.*/ces/*,url.ilike.*/rgstr/*,url.ilike.*/v1/metrics*,url.ilike.*sentry*,url.ilike.*/ab.test*,url.ilike.*/ab.register*,url.ilike.*/stream_status*,url.ilike.*/init,url.ilike.*/init?*,url.ilike.*/init/*,url.ilike.*/experimental/*)";
+
+export const INTERCEPTS_METADATA_SELECT = "id,timestamp,url,method,page_id";
+
+/** Lean list query — no req_body/resp_body; preview_text set at upload. */
+export const INTERCEPTS_LIST_SELECT =
+  "id,timestamp,url,method,page_id,preview_text,is_conversation,conversation_id";
+
+/** @deprecated Full-body list select; use INTERCEPTS_LIST_SELECT + fetchInterceptById for detail. */
+export const INTERCEPTS_LIST_PREVIEW_SELECT =
+  "id,timestamp,url,method,page_id,req_body,resp_body,preview_text,is_conversation,conversation_id";
+
+export const INTERCEPTS_BODY_SELECT =
+  "id,timestamp,url,method,page_id,req_body,resp_body,preview_text,is_conversation,conversation_id";
+
+export type InterceptsQueryOptions = {
+  limit: number;
+  select?: string;
+  /** When true, filter is_conversation=eq.true (requires migration). */
+  conversationOnly?: boolean;
+  /** When true, append conversation URL + noise filters for smaller result sets. */
+  conversationUrlFilter?: boolean;
+  /** When true, append strict conversation URL or=(...) for legacy/historical rows. */
+  strictConversationUrlFilter?: boolean;
+  /** Restrict to GET/POST to skip static assets in legacy fallback scans. */
+  httpMethodsOnly?: boolean;
+};
+
+function appendPageAndTimeFilters(
+  params: URLSearchParams,
+  filter: ConversationRecordsFilter,
+  _allPageIds: string[],
+): void {
+  if (filter.pageId) {
+    params.append("page_id", `eq.${filter.pageId}`);
+  }
+  // pageId=null → no page_id filter: include all rows in Supabase (e.g. after page recreate).
+
+  // Time range is applied client-side after timestamp normalization (seconds vs ms).
+}
+
+export function appendConversationSqlFilters(params: URLSearchParams): void {
+  params.append("or", CONVERSATION_URL_OR_VALUE);
+  params.append("not.or", NOISE_URL_NOT_OR_VALUE);
+}
+
+export function appendStrictConversationUrlFilter(params: URLSearchParams): void {
+  params.append("or", STRICT_CONVERSATION_URL_OR_VALUE);
+}
+
 export function buildInterceptsQueryParams(
   filter: ConversationRecordsFilter,
   allPageIds: string[],
-  limit: number,
+  options: InterceptsQueryOptions | number,
 ): URLSearchParams {
+  const resolved: InterceptsQueryOptions =
+    typeof options === "number" ? { limit: options } : options;
+
   const params = new URLSearchParams({
     order: "timestamp.desc",
-    limit: String(limit),
+    limit: String(resolved.limit),
   });
 
-  if (filter.pageId) {
-    params.append("page_id", `eq.${filter.pageId}`);
-  } else if (allPageIds.length > 0) {
-    const quoted = allPageIds.map((id) => quotePostgrestId(id)).join(",");
-    params.append("page_id", `in.(${quoted})`);
+  if (resolved.select) {
+    params.set("select", resolved.select);
   }
 
-  if (filter.timeFromMs != null) {
-    params.append("timestamp", `gte.${filter.timeFromMs}`);
+  appendPageAndTimeFilters(params, filter, allPageIds);
+
+  if (resolved.httpMethodsOnly) {
+    params.append("method", "in.(GET,POST)");
   }
-  if (filter.timeToMs != null) {
-    params.append("timestamp", `lte.${filter.timeToMs}`);
+
+  if (resolved.strictConversationUrlFilter) {
+    appendStrictConversationUrlFilter(params);
+  }
+
+  if (resolved.conversationUrlFilter) {
+    appendConversationSqlFilters(params);
+  }
+
+  if (resolved.conversationOnly) {
+    params.append("is_conversation", "eq.true");
   }
 
   return params;
+}
+
+/** Default options for session-records list (lean metadata, no bodies). */
+export function conversationListQueryOptions(limit: number): InterceptsQueryOptions {
+  return {
+    limit,
+    select: INTERCEPTS_LIST_SELECT,
+    conversationOnly: true,
+  };
+}
+
+export function buildInterceptByIdParams(id: string): URLSearchParams {
+  return new URLSearchParams({
+    id: `eq.${id}`,
+    limit: "1",
+    select: INTERCEPTS_BODY_SELECT,
+  });
+}
+
+export function buildInterceptsByIdsParams(ids: string[]): URLSearchParams {
+  const quoted = ids.map((id) => quotePostgrestId(id)).join(",");
+  return new URLSearchParams({
+    id: `in.(${quoted})`,
+    order: "timestamp.desc",
+    select: INTERCEPTS_BODY_SELECT,
+  });
 }

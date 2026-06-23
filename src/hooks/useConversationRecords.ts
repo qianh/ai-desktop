@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchFilteredConversationIntercepts } from "../api";
+import {
+  fetchFilteredConversationIntercepts,
+  type ConversationTruncationReason,
+} from "../api";
 import {
   filterCacheKey,
   type ConversationRecordsFilter,
@@ -12,7 +15,6 @@ export function useConversationRecords(
   allPageIds: string[],
   pageIdsKey: string,
   queryToken = 0,
-  invalidateKey = 0,
 ) {
   const cacheKey = useMemo(
     () => filterCacheKey(filter, allPageIds),
@@ -23,6 +25,9 @@ export function useConversationRecords(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
+  const [truncationReason, setTruncationReason] = useState<ConversationTruncationReason | null>(
+    null,
+  );
 
   useEffect(() => {
     if (queryToken < 1) return;
@@ -33,12 +38,14 @@ export function useConversationRecords(
       setError(null);
       setItems([]);
       setTruncated(false);
+      setTruncationReason(null);
       return;
     }
 
     const ac = new AbortController();
     setItems([]);
     setTruncated(false);
+    setTruncationReason(null);
     setLoading(true);
     setError(null);
 
@@ -47,6 +54,7 @@ export function useConversationRecords(
         if (ac.signal.aborted) return;
         setItems(result.rows);
         setTruncated(result.truncated);
+        setTruncationReason(result.truncationReason);
       })
       .catch((e) => {
         if (ac.signal.aborted) return;
@@ -54,6 +62,7 @@ export function useConversationRecords(
         setError(e instanceof Error ? e.message : String(e));
         setItems([]);
         setTruncated(false);
+        setTruncationReason(null);
       })
       .finally(() => {
         if (!ac.signal.aborted) setLoading(false);
@@ -62,7 +71,7 @@ export function useConversationRecords(
     return () => {
       ac.abort();
     };
-  }, [cacheKey, pageIdsKey, queryToken, invalidateKey, filter, allPageIds]);
+  }, [cacheKey, pageIdsKey, queryToken, filter, allPageIds]);
 
-  return { items, loading, error, truncated };
+  return { items, loading, error, truncated, truncationReason };
 }
