@@ -1,5 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
-import { isConversationIntercept, conversationPreview, parseConversationBodies } from "./lib/conversationFilter";
+import { isConversationIntercept, parseConversationBodies } from "./lib/conversationFilter";
+import {
+  buildInterceptsQueryParams,
+  type ConversationRecordsFilter,
+} from "./lib/conversationRecordsQuery";
 import type {
   AppEntry,
   Flow,
@@ -7,7 +11,6 @@ import type {
   Header,
   InterceptedFetch,
   Page,
-  SessionRecordSummary,
   SessionStatus,
 } from "./types";
 import { fmtSize } from "./lib/format";
@@ -341,17 +344,35 @@ export async function exportSession(sessionId: string, format: "json" | "har"): 
 
 export const REPORTED_INTERCEPTS_LIMIT = 200;
 
-export async function fetchReportedIntercepts(
-  pageId: string,
+/** Fetch more raw rows before client-side conversation filtering. */
+const RAW_INTERCEPTS_FETCH_LIMIT = 1000;
+
+export type FilteredConversationResult = {
+  rows: InterceptedFetch[];
+  truncated: boolean;
+};
+
+function capConversationRows(rawRows: InterceptedFetch[]): FilteredConversationResult {
+  const filtered = filterConversationRows(rawRows);
+  const truncated =
+    filtered.length > REPORTED_INTERCEPTS_LIMIT || rawRows.length >= RAW_INTERCEPTS_FETCH_LIMIT;
+  return {
+    rows: filtered.slice(0, REPORTED_INTERCEPTS_LIMIT),
+    truncated,
+  };
+}
+
+function isInFilterFallbackError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /\bSupabase 400\b/.test(error.message);
+}
+
+async function fetchInterceptsFromSupabase(
+  params: URLSearchParams,
   config: SupabaseConfig,
   signal?: AbortSignal,
 ): Promise<InterceptedFetch[]> {
   const base = config.url.replace(/\/$/, "");
-  const params = new URLSearchParams({
-    page_id: `eq.${pageId}`,
-    order: "timestamp.desc",
-    limit: String(REPORTED_INTERCEPTS_LIMIT),
-  });
   const resp = await fetch(`${base}/rest/v1/intercepts?${params}`, {
     signal,
     headers: {
@@ -367,12 +388,7 @@ export async function fetchReportedIntercepts(
   return (await resp.json()) as InterceptedFetch[];
 }
 
-export async function fetchConversationIntercepts(
-  pageId: string,
-  config: SupabaseConfig,
-  signal?: AbortSignal,
-): Promise<InterceptedFetch[]> {
-  const rows = await fetchReportedIntercepts(pageId, config, signal);
+function filterConversationRows(rows: InterceptedFetch[]): InterceptedFetch[] {
   return rows.filter((r) => {
     if (!isConversationIntercept(r)) return false;
     const { user, assistant, rawReq, rawResp } = parseConversationBodies(r);
@@ -380,39 +396,68 @@ export async function fetchConversationIntercepts(
   });
 }
 
-export async function fetchSessionRecordSummaries(
-  pages: Page[],
+export async function fetchReportedIntercepts(
+  pageId: string,
   config: SupabaseConfig,
   signal?: AbortSignal,
-): Promise<SessionRecordSummary[]> {
-  const results = await Promise.all(
-    pages.map(async (page) => {
-      const base = {
-        pageId: page.id,
-        pageName: page.name,
-        pageHost: page.host,
-        letter: page.letter,
-        color: page.color,
-      };
-      try {
-        const rows = await fetchConversationIntercepts(page.id, config, signal);
-        const latest = rows[0];
-        return {
-          ...base,
-          recordCount: rows.length,
-          lastTimestamp: latest?.timestamp ?? null,
-          preview: latest ? conversationPreview(latest) : null,
-        } satisfies SessionRecordSummary;
-      } catch {
-        return {
-          ...base,
-          recordCount: 0,
-          lastTimestamp: null,
-          preview: null,
-        } satisfies SessionRecordSummary;
-      }
+): Promise<InterceptedFetch[]> {
+  const params = new URLSearchParams({
+    page_id: `eq.${pageId}`,
+    order: "timestamp.desc",
+    limit: String(REPORTED_INTERCEPTS_LIMIT),
+  });
+  return fetchInterceptsFromSupabase(params, config, signal);
+}
+
+export async function fetchConversationIntercepts(
+  pageId: string,
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<InterceptedFetch[]> {
+  const rows = await fetchReportedIntercepts(pageId, config, signal);
+  return filterConversationRows(rows);
+}
+
+async function fetchPerPageMerged(
+  filter: ConversationRecordsFilter,
+  allPageIds: string[],
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<FilteredConversationResult> {
+  const perPage = await Promise.all(
+    allPageIds.map(async (pageId) => {
+      const single = { ...filter, pageId };
+      const params = buildInterceptsQueryParams(single, allPageIds, RAW_INTERCEPTS_FETCH_LIMIT);
+      return fetchInterceptsFromSupabase(params, config, signal);
     }),
   );
-  return results.sort((a, b) => (b.lastTimestamp ?? 0) - (a.lastTimestamp ?? 0));
+  const merged = perPage.flat().sort((a, b) => b.timestamp - a.timestamp);
+  return capConversationRows(merged);
+}
+
+export async function fetchFilteredConversationIntercepts(
+  filter: ConversationRecordsFilter,
+  allPageIds: string[],
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<FilteredConversationResult> {
+  if (!filter.pageId && allPageIds.length === 0) {
+    return { rows: [], truncated: false };
+  }
+
+  if (filter.pageId) {
+    const params = buildInterceptsQueryParams(filter, allPageIds, RAW_INTERCEPTS_FETCH_LIMIT);
+    const rows = await fetchInterceptsFromSupabase(params, config, signal);
+    return capConversationRows(rows);
+  }
+
+  try {
+    const params = buildInterceptsQueryParams(filter, allPageIds, RAW_INTERCEPTS_FETCH_LIMIT);
+    const rows = await fetchInterceptsFromSupabase(params, config, signal);
+    return capConversationRows(rows);
+  } catch (error) {
+    if (!isInFilterFallbackError(error)) throw error;
+    return fetchPerPageMerged(filter, allPageIds, config, signal);
+  }
 }
 

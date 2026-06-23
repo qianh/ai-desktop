@@ -168,16 +168,19 @@ export default function Sidebar(p: Props) {
         >
           💬
         </button>
-        {p.pages.map((pg) => (
-          <button
-            key={pg.id}
-            onClick={() => p.onSelect(pg.id)}
-            title={pg.name}
-            style={{ ...collapsedIconBtn(sessionsMode && p.activeId === pg.id), color: pg.color || "#5a5a5e" }}
-          >
-            {pg.letter}
-          </button>
-        ))}
+        {p.pages.map((pg) => {
+          const sel = sessionsMode && p.activeId === pg.id;
+          return (
+            <button
+              key={pg.id}
+              onClick={() => p.onSelect(pg.id)}
+              title={pg.name}
+              style={{ ...collapsedIconBtn(sel), color: pg.color || "#5a5a5e" }}
+            >
+              {pg.letter}
+            </button>
+          );
+        })}
         {p.apps.map((a) => (
           <button
             key={a.id}

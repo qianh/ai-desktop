@@ -24,8 +24,7 @@ type Props = {
   flowsByPage: Record<string, Flow[]>;
   flows: Flow[];
   interceptsByPage: Record<string, InterceptedFetch[]>;
-  recordsPageId: string | null;
-  recordsInvalidate: Record<string, number>;
+  recordsInvalidate: number;
   loading: boolean;
   deleteTargetId: string | null;
   overlayOpen: boolean;
@@ -37,7 +36,6 @@ type Props = {
   recording: boolean;
   captureBusy: boolean;
   launchMode: string;
-  onSelectPage: (pageId: string) => void;
   onToggleInspector: () => void;
   onSelectFlow: (flowId: string) => void;
   onQuery: (v: string) => void;
@@ -152,12 +150,7 @@ export default function SessionsWorkspace(p: Props) {
           background: "#ffffff",
         }}
       >
-        <SessionRecordsView
-          pages={p.pages}
-          selectedPageId={p.recordsPageId}
-          onSelectPage={p.onSelectPage}
-          invalidateByPage={p.recordsInvalidate}
-        />
+        <SessionRecordsView pages={p.pages} invalidateKey={p.recordsInvalidate} />
       </div>
 
       {chrome.showApp && p.active && "bundle" in p.active && (

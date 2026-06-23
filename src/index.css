@@ -4,6 +4,15 @@
   50% { opacity: 0.35; }
 }
 
+@keyframes ascSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes ascShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 * {
   box-sizing: border-box;
 }

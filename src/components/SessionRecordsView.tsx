@@ -1,221 +1,449 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { fetchSessionRecordSummaries, REPORTED_INTERCEPTS_LIMIT } from "../api";
+import { useMemo, useState, type CSSProperties } from "react";
+import { REPORTED_INTERCEPTS_LIMIT } from "../api";
 import { formatTimestamp } from "../lib/format";
-import { conversationPreview, parseConversationBodies } from "../lib/conversationFilter";
+import { conversationPreview } from "../lib/conversationFilter";
+import {
+  defaultPastWeekRange,
+  draftToFilter,
+  validateTimeRange,
+  type ConversationRecordsFilter,
+} from "../lib/conversationRecordsQuery";
 import { pageListIdentityKey } from "../lib/pagePanelState";
 import { loadSupabaseConfig } from "../lib/supabase";
-import { truncateBody } from "../lib/truncate";
 import { useConversationRecords } from "../hooks/useConversationRecords";
-import type { Page, SessionRecordSummary } from "../types";
-import { ACCENT, iconStyle } from "../lib/ui";
+import type { InterceptedFetch, Page } from "../types";
+import { ACCENT, FONT, primaryBtn, secondaryBtn } from "../lib/ui";
+import SessionRecordModal from "./modals/SessionRecordModal";
 
 type Props = {
   pages: Page[];
-  selectedPageId: string | null;
-  onSelectPage: (pageId: string) => void;
-  invalidateByPage: Record<string, number>;
+  invalidateKey: number;
 };
 
-const refreshBtnStyle = (loading: boolean): CSSProperties => ({
-  fontSize: 12,
-  padding: "5px 12px",
-  borderRadius: 6,
-  border: "1px solid #d4d4da",
+const fieldLabel: CSSProperties = {
+  fontSize: 10.5,
+  fontWeight: 600,
+  color: "#9a9aa0",
+  letterSpacing: ".04em",
+  textTransform: "uppercase",
+  marginBottom: 6,
+  display: "block",
+};
+
+const fieldInput: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  height: 32,
+  border: "1px solid #d8d8dc",
+  borderRadius: 8,
+  padding: "0 10px",
+  font: `12.5px ${FONT}`,
+  color: "#1d1d1f",
   background: "#fff",
+  outline: "none",
+};
+
+const timeRangeShell: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  height: 32,
+  border: "1px solid #d8d8dc",
+  borderRadius: 8,
+  background: "#fff",
+  overflow: "hidden",
+};
+
+const timeRangeInput: CSSProperties = {
+  width: 158,
+  height: "100%",
+  border: "none",
+  padding: "0 8px",
+  font: `12px ${FONT}`,
+  color: "#1d1d1f",
+  background: "transparent",
+  outline: "none",
+};
+
+const ghostBtn: CSSProperties = {
+  ...secondaryBtn,
+  fontSize: 12,
+  padding: "6px 12px",
+  borderRadius: 7,
+  color: "#5a5a5e",
+  height: 32,
+};
+
+const queryBtn = (loading: boolean): CSSProperties => ({
+  ...primaryBtn,
+  fontSize: 12.5,
+  padding: "0 20px",
+  height: 32,
+  borderRadius: 8,
   cursor: loading ? "default" : "pointer",
-  color: ACCENT,
+  opacity: loading ? 0.7 : 1,
 });
 
-function Bubble({
-  role,
-  label,
-  body,
-}: {
-  role: "user" | "assistant";
-  label: string;
-  body: string | null;
-}) {
-  const isUser = role === "user";
-  const [expanded, setExpanded] = useState(false);
-  const preview = expanded ? { text: body || "—", truncated: false } : truncateBody(body);
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: isUser ? "flex-end" : "flex-start",
-        marginBottom: 8,
-      }}
-    >
-      <span style={{ fontSize: 10, color: "#9a9aa0", marginBottom: 2 }}>{label}</span>
-      <div
-        style={{
-          maxWidth: "88%",
-          padding: "10px 12px",
-          borderRadius: 12,
-          background: isUser ? "#e8f0fe" : "#f3f3f5",
-          border: `1px solid ${isUser ? "#c5d9f8" : "#e0e0e4"}`,
-          fontSize: 13,
-          lineHeight: 1.5,
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-          color: "#1d1d1f",
-          maxHeight: expanded ? 480 : undefined,
-          overflow: expanded ? "auto" : undefined,
-        }}
-      >
-        {preview.text}
-      </div>
-      {preview.truncated && (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          style={{
-            marginTop: 4,
-            fontSize: 11,
-            border: "none",
-            background: "none",
-            color: ACCENT,
-            cursor: "pointer",
-            padding: 0,
-          }}
-        >
-          展开全文
-        </button>
-      )}
-    </div>
-  );
-}
-
-function ConversationDetail({
-  pageId,
-  pageName,
+function SessionRecordsList({
+  pages,
+  appliedFilter,
+  queryToken,
+  draftPageId,
+  draftTimeFrom,
+  draftTimeTo,
+  onDraftPageId,
+  onDraftTimeFrom,
+  onDraftTimeTo,
+  onClearTimeRange,
+  onQuery,
+  filterError,
   invalidateKey,
 }: {
-  pageId: string;
-  pageName: string;
+  pages: Page[];
+  appliedFilter: ConversationRecordsFilter;
+  queryToken: number;
+  draftPageId: string | null;
+  draftTimeFrom: string;
+  draftTimeTo: string;
+  onDraftPageId: (pageId: string | null) => void;
+  onDraftTimeFrom: (v: string) => void;
+  onDraftTimeTo: (v: string) => void;
+  onClearTimeRange: () => void;
+  onQuery: () => void;
+  filterError: string | null;
   invalidateKey: number;
 }) {
-  const { items, loading, error, refresh } = useConversationRecords(pageId, invalidateKey);
+  const [selectedRecord, setSelectedRecord] = useState<InterceptedFetch | null>(null);
+  const pagesKey = pageListIdentityKey(pages);
+  const pageIds = useMemo(() => pages.map((p) => p.id), [pagesKey]);
+  const pageById = useMemo(() => Object.fromEntries(pages.map((p) => [p.id, p])), [pages]);
+  const { items, loading, error, truncated } = useConversationRecords(
+    appliedFilter,
+    pageIds,
+    pagesKey,
+    queryToken,
+    invalidateKey,
+  );
+
+  const hasDraftTime = draftTimeFrom.trim() !== "" || draftTimeTo.trim() !== "";
 
   return (
-    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "10px 16px",
-          borderBottom: "1px solid #ededf0",
-          background: "#fbfbfc",
+          padding: "14px 18px 16px",
+          borderBottom: "1px solid #e8e8ec",
+          background: "linear-gradient(180deg, #fbfbfc 0%, #f6f6f8 100%)",
           flex: "none",
         }}
       >
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#1d1d1f" }}>{pageName}</div>
-          <div style={{ fontSize: 11, color: "#9a9aa0", marginTop: 2 }}>
-            {loading ? "加载中…" : `${items.length} 条对话记录`}
-            {!loading && items.length >= REPORTED_INTERCEPTS_LIMIT && (
-              <span style={{ color: "#c97b20", marginLeft: 6 }}>
-                （仅显示最近 {REPORTED_INTERCEPTS_LIMIT} 条）
-              </span>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "#1d1d1f", letterSpacing: "-.01em" }}>
+            会话记录
+          </div>
+          <div style={{ fontSize: 12, color: "#9a9aa0", marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
+            {loading && (
+              <span
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: "50%",
+                  border: "2px solid #d4d4da",
+                  borderTopColor: ACCENT,
+                  animation: "ascSpin .8s linear infinite",
+                  flex: "none",
+                }}
+              />
+            )}
+            <span>
+              {queryToken < 1 ? "请设置条件后查询" : loading ? "查询中…" : `${items.length} 条对话记录`}
+            </span>
+            {!loading && queryToken >= 1 && truncated && (
+              <span style={{ color: "#c97b20" }}>仅显示最近 {REPORTED_INTERCEPTS_LIMIT} 条</span>
             )}
           </div>
         </div>
-        <button onClick={refresh} disabled={loading} style={refreshBtnStyle(loading)}>
-          刷新
-        </button>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "flex-end",
+            gap: 12,
+            padding: "12px 14px",
+            borderRadius: 10,
+            border: "1px solid #e4e4e8",
+            background: "#ffffff",
+            boxShadow: "0 1px 2px rgba(0,0,0,.04)",
+          }}
+        >
+          <label style={{ width: 168, flex: "none" }}>
+            <span style={fieldLabel}>Page</span>
+            <select
+              value={draftPageId ?? ""}
+              onChange={(e) => onDraftPageId(e.target.value || null)}
+              style={{
+                ...fieldInput,
+                cursor: "pointer",
+                paddingRight: 28,
+                appearance: "none",
+                backgroundImage:
+                  "linear-gradient(45deg, transparent 50%, #9a9aa0 50%), linear-gradient(135deg, #9a9aa0 50%, transparent 50%)",
+                backgroundPosition: "calc(100% - 16px) 14px, calc(100% - 11px) 14px",
+                backgroundSize: "5px 5px, 5px 5px",
+                backgroundRepeat: "no-repeat",
+              }}
+            >
+              <option value="">全部 Page</option>
+              {pages.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div style={{ flex: "none" }}>
+            <span style={fieldLabel}>发生时间</span>
+            <div style={timeRangeShell}>
+              <input
+                type="datetime-local"
+                value={draftTimeFrom}
+                onChange={(e) => onDraftTimeFrom(e.target.value)}
+                style={timeRangeInput}
+                title="起始时间"
+              />
+              <span style={{ flex: "none", width: 1, alignSelf: "stretch", background: "#e8e8ec" }} />
+              <span style={{ flex: "none", padding: "0 6px", fontSize: 11, color: "#b0b0b6", userSelect: "none" }}>
+                至
+              </span>
+              <span style={{ flex: "none", width: 1, alignSelf: "stretch", background: "#e8e8ec" }} />
+              <input
+                type="datetime-local"
+                value={draftTimeTo}
+                onChange={(e) => onDraftTimeTo(e.target.value)}
+                style={timeRangeInput}
+                title="结束时间"
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClearTimeRange}
+            disabled={!hasDraftTime}
+            style={{
+              ...ghostBtn,
+              opacity: hasDraftTime ? 1 : 0.45,
+              cursor: hasDraftTime ? "pointer" : "default",
+            }}
+          >
+            清除时间
+          </button>
+
+          <div style={{ flex: "1 1 12px", minWidth: 8 }} />
+
+          <button type="button" onClick={onQuery} disabled={loading} style={queryBtn(loading)}>
+            查询
+          </button>
+        </div>
       </div>
 
-      {error && (
-        <div style={{ padding: "10px 16px", background: "#fff5f5", color: "#d23b30", fontSize: 12 }}>
-          {error}
+      {filterError && (
+        <div style={{ padding: "10px 16px", background: "#fff8f0", color: "#c97b20", fontSize: 12 }}>
+          {filterError}
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: "auto", padding: "16px 20px" }}>
-        {!loading && items.length === 0 && !error && (
-          <div style={{ padding: 48, textAlign: "center", color: "#9a9aa0", fontSize: 13 }}>
-            暂无对话记录
-            <div style={{ fontSize: 12, marginTop: 8 }}>仅展示对话类请求，已过滤 analytics 等噪音</div>
+      {error && (
+        <div
+          style={{
+            padding: "10px 16px",
+            background: "#fff5f5",
+            color: "#d23b30",
+            fontSize: 12,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <span>{error}</span>
+          <button type="button" onClick={onQuery} disabled={loading} style={ghostBtn}>
+            重试
+          </button>
+        </div>
+      )}
+
+      <div style={{ flex: 1, overflow: "auto", minHeight: 0, background: "#fff" }}>
+        {loading && items.length === 0 && (
+          <div style={{ padding: "32px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                style={{
+                  height: 68,
+                  borderRadius: 8,
+                  background: "linear-gradient(90deg, #f3f3f5 0%, #ececef 50%, #f3f3f5 100%)",
+                  backgroundSize: "200% 100%",
+                  animation: "ascShimmer 1.2s ease-in-out infinite",
+                  animationDelay: `${i * 0.15}s`,
+                }}
+              />
+            ))}
           </div>
         )}
-        {items.map((item) => {
-          const { user, assistant, rawReq, rawResp } = parseConversationBodies(item);
-          const urlShort = item.url.length > 72 ? item.url.slice(0, 72) + "…" : item.url;
-          return (
+        {!loading && queryToken >= 1 && items.length === 0 && !error && (
+          <div style={{ padding: 56, textAlign: "center", color: "#9a9aa0", fontSize: 13 }}>
             <div
-              key={item.id}
               style={{
-                marginBottom: 24,
-                paddingBottom: 20,
-                borderBottom: "1px solid #f0f0f2",
+                width: 44,
+                height: 44,
+                margin: "0 auto 14px",
+                borderRadius: 12,
+                background: "#f3f3f5",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 20,
               }}
             >
-              <div style={{ fontSize: 11, color: "#9a9aa0", marginBottom: 12 }}>
-                {formatTimestamp(item.timestamp)} · {item.method} · {urlShort}
-              </div>
-              {user && <Bubble role="user" label="用户" body={user} />}
-              {assistant && <Bubble role="assistant" label="AI" body={assistant} />}
-              {!user && !assistant && rawReq && (
-                <Bubble role="user" label="请求体（未识别为对话）" body={rawReq} />
-              )}
-              {!user && !assistant && rawResp && (
-                <Bubble role="assistant" label="响应体（未识别为对话）" body={rawResp} />
-              )}
-              {!user && !assistant && !rawReq && !rawResp && (
-                <div style={{ fontSize: 12, color: "#9a9aa0" }}>{conversationPreview(item)}</div>
-              )}
+              💬
             </div>
+            <div style={{ fontWeight: 500, color: "#5a5a5e" }}>暂无符合条件的对话记录</div>
+            <div style={{ fontSize: 12, marginTop: 6 }}>可调整 Page 或时间范围后重新查询</div>
+          </div>
+        )}
+        {!loading &&
+          items.map((item) => {
+          const preview = conversationPreview(item);
+          const urlShort = item.url.length > 72 ? item.url.slice(0, 72) + "…" : item.url;
+          const page = item.page_id ? pageById[item.page_id] : undefined;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setSelectedRecord(item)}
+              style={{
+                display: "block",
+                width: "100%",
+                border: "none",
+                borderBottom: "1px solid #f0f0f2",
+                background: "transparent",
+                cursor: "pointer",
+                padding: "14px 20px",
+                textAlign: "left",
+                transition: "background .12s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#f7f8fa";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13.5,
+                  color: "#1d1d1f",
+                  lineHeight: 1.5,
+                  overflow: "hidden",
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                }}
+              >
+                {preview}
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#9a9aa0",
+                  marginTop: 7,
+                  display: "flex",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: "4px 0",
+                }}
+              >
+                <span style={{ fontFamily: "ui-monospace,Menlo,monospace", color: "#7a7a80" }}>
+                  {formatTimestamp(item.timestamp)}
+                </span>
+                {page && (
+                  <>
+                    <span style={{ margin: "0 6px", color: "#d4d4da" }}>·</span>
+                    <span
+                      style={{
+                        fontSize: 10.5,
+                        fontWeight: 600,
+                        color: page.color,
+                        background: page.color + "14",
+                        borderRadius: 4,
+                        padding: "1px 6px",
+                      }}
+                    >
+                      {page.name}
+                    </span>
+                  </>
+                )}
+                <span style={{ margin: "0 6px", color: "#d4d4da" }}>·</span>
+                <span style={{ fontWeight: 600, color: "#5a5a5e" }}>{item.method}</span>
+                <span style={{ margin: "0 6px", color: "#d4d4da" }}>·</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
+                  {urlShort}
+                </span>
+              </div>
+            </button>
           );
-        })}
+          })}
       </div>
+
+      {selectedRecord && (
+        <div
+          onClick={() => setSelectedRecord(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(20,20,24,.34)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            backdropFilter: "blur(1.5px)",
+          }}
+        >
+          <SessionRecordModal record={selectedRecord} onClose={() => setSelectedRecord(null)} />
+        </div>
+      )}
     </div>
   );
 }
 
-export default function SessionRecordsView({ pages, selectedPageId, onSelectPage, invalidateByPage }: Props) {
-  const [summaries, setSummaries] = useState<SessionRecordSummary[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+export default function SessionRecordsView({ pages, invalidateKey }: Props) {
   const config = useMemo(() => loadSupabaseConfig(), []);
   const unconfigured = !config.url || !config.key;
-  const pagesRef = useRef(pages);
-  pagesRef.current = pages;
 
-  const pageListKey = pageListIdentityKey(pages);
+  const defaultRange = useMemo(() => defaultPastWeekRange(), []);
 
-  const loadSummaries = useCallback(
-    async (signal?: AbortSignal) => {
-      if (!config.url || !config.key) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const rows = await fetchSessionRecordSummaries(pagesRef.current, config, signal);
-        if (signal?.aborted) return;
-        setSummaries(rows);
-      } catch (e) {
-        if (signal?.aborted) return;
-        setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        if (!signal?.aborted) setLoading(false);
-      }
-    },
-    [config.key, config.url, pageListKey],
+  const [draftPageId, setDraftPageId] = useState<string | null>(null);
+  const [draftTimeFrom, setDraftTimeFrom] = useState(defaultRange.from);
+  const [draftTimeTo, setDraftTimeTo] = useState(defaultRange.to);
+
+  const [appliedFilter, setAppliedFilter] = useState<ConversationRecordsFilter>(() =>
+    draftToFilter(null, defaultRange.from, defaultRange.to),
   );
+  const [queryToken, setQueryToken] = useState(1);
+  const [filterError, setFilterError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const ac = new AbortController();
-    void loadSummaries(ac.signal);
-    return () => ac.abort();
-  }, [loadSummaries]);
-
-  const selected =
-    summaries.find((s) => s.pageId === selectedPageId) ||
-    summaries.find((s) => s.recordCount > 0) ||
-    summaries[0];
+  const runQuery = () => {
+    const rangeError = validateTimeRange(draftTimeFrom, draftTimeTo);
+    if (rangeError) {
+      setFilterError(rangeError);
+      return;
+    }
+    setFilterError(null);
+    setAppliedFilter(draftToFilter(draftPageId, draftTimeFrom, draftTimeTo));
+    setQueryToken((t) => t + 1);
+  };
 
   if (unconfigured) {
     return (
@@ -237,152 +465,41 @@ export default function SessionRecordsView({ pages, selectedPageId, onSelectPage
     );
   }
 
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+  if (pages.length === 0) {
+    return (
       <div
         style={{
+          flex: 1,
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
-          padding: "10px 16px",
-          borderBottom: "1px solid #e0e0e4",
-          background: "#f6f6f8",
-          flex: "none",
+          justifyContent: "center",
+          color: "#9a9aa0",
+          fontSize: 13,
         }}
       >
-        <span style={{ fontSize: 14, fontWeight: 600, color: "#1d1d1f" }}>会话记录</span>
-        <button
-          onClick={() => void loadSummaries()}
-          disabled={loading}
-          style={refreshBtnStyle(loading)}
-        >
-          {loading ? "加载中…" : "刷新列表"}
-        </button>
+        还没有 Page，请先添加页面后再查看会话记录
       </div>
+    );
+  }
 
-      {error && (
-        <div style={{ padding: "8px 16px", background: "#fff5f5", color: "#d23b30", fontSize: 12 }}>
-          {error}
-        </div>
-      )}
-
-      <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
-        <div
-          style={{
-            width: 280,
-            flex: "none",
-            borderRight: "1px solid #e0e0e4",
-            overflow: "auto",
-            background: "#fafafa",
-          }}
-        >
-          {summaries.length === 0 && !loading && (
-            <div style={{ padding: 24, textAlign: "center", color: "#9a9aa0", fontSize: 12 }}>
-              暂无 Page，请先添加页面
-            </div>
-          )}
-          {summaries.map((s) => {
-            const sel = (selectedPageId || selected?.pageId) === s.pageId;
-            return (
-              <button
-                key={s.pageId}
-                onClick={() => onSelectPage(s.pageId)}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 10,
-                  width: "100%",
-                  border: "none",
-                  borderBottom: "1px solid #ededf0",
-                  background: sel ? ACCENT + "18" : "transparent",
-                  cursor: "pointer",
-                  padding: "12px 14px",
-                  textAlign: "left",
-                }}
-              >
-                <span style={iconStyle(s.color)}>{s.letter}</span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 8,
-                    }}
-                  >
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#1d1d1f" }}>{s.pageName}</span>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: s.recordCount > 0 ? ACCENT : "#9a9aa0",
-                        fontFamily: "ui-monospace,Menlo,monospace",
-                        flex: "none",
-                      }}
-                    >
-                      {s.recordCount}
-                    </span>
-                  </span>
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: 11,
-                      color: "#9a9aa0",
-                      marginTop: 2,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {s.pageHost}
-                  </span>
-                  {s.preview && (
-                    <span
-                      style={{
-                        fontSize: 11.5,
-                        color: "#5a5a5e",
-                        marginTop: 6,
-                        lineHeight: 1.4,
-                        overflow: "hidden",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                      }}
-                    >
-                      {s.preview}
-                    </span>
-                  )}
-                  {s.lastTimestamp && (
-                    <span style={{ display: "block", fontSize: 10, color: "#b0b0b6", marginTop: 4 }}>
-                      {formatTimestamp(s.lastTimestamp)}
-                    </span>
-                  )}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {(selectedPageId || selected?.pageId) ? (
-          <ConversationDetail
-            pageId={selectedPageId || selected!.pageId}
-            pageName={selected?.pageName || "会话"}
-            invalidateKey={invalidateByPage[selectedPageId || selected!.pageId] ?? 0}
-          />
-        ) : (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#9a9aa0",
-              fontSize: 13,
-            }}
-          >
-            从左侧选择一个会话查看对话记录
-          </div>
-        )}
-      </div>
-    </div>
+  return (
+    <SessionRecordsList
+      pages={pages}
+      appliedFilter={appliedFilter}
+      queryToken={queryToken}
+      draftPageId={draftPageId}
+      draftTimeFrom={draftTimeFrom}
+      draftTimeTo={draftTimeTo}
+      onDraftPageId={setDraftPageId}
+      onDraftTimeFrom={setDraftTimeFrom}
+      onDraftTimeTo={setDraftTimeTo}
+      onClearTimeRange={() => {
+        setDraftTimeFrom("");
+        setDraftTimeTo("");
+      }}
+      onQuery={runQuery}
+      filterError={filterError}
+      invalidateKey={invalidateKey}
+    />
   );
 }

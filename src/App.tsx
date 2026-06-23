@@ -31,7 +31,7 @@ import StatusBar from "./components/StatusBar";
 import Sidebar from "./components/Sidebar";
 import CertManager from "./components/CertManager";
 import SessionsWorkspace from "./components/SessionsWorkspace";
-import { invalidateConversationRecords } from "./hooks/useConversationRecords";
+
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
 import AddPageModal from "./components/modals/AddPageModal";
 import AddAppModal from "./components/modals/AddAppModal";
@@ -77,8 +77,7 @@ export default function App() {
   const [deleteAppTarget, setDeleteAppTarget] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [interceptsByPage, setInterceptsByPage] = useState<Record<string, InterceptedFetch[]>>({});
-  const [recordsPageId, setRecordsPageId] = useState<string | null>(null);
-  const [recordsInvalidate, setRecordsInvalidate] = useState<Record<string, number>>({});
+  const [recordsInvalidate, setRecordsInvalidate] = useState(0);
 
   const refreshPages = useCallback(async () => {
     const apiPages = await listPages();
@@ -178,10 +177,7 @@ export default function App() {
   };
 
   const handleOpenSessionRecords = () => {
-    setNavMode("records");
-    const pageId =
-      activeId && !isAppId(activeId) ? activeId : pages[0]?.id ?? null;
-    setRecordsPageId(pageId);
+    setNavMode((mode) => (mode === "records" ? "sessions" : "records"));
   };
 
   const active = find(activeId);
@@ -265,11 +261,7 @@ export default function App() {
       ...prev,
       [pageId]: [...(prev[pageId] || []), ...fresh],
     }));
-    invalidateConversationRecords(pageId);
-    setRecordsInvalidate((prev) => ({
-      ...prev,
-      [pageId]: (prev[pageId] ?? 0) + 1,
-    }));
+    setRecordsInvalidate((n) => n + 1);
 
     const sbConfig = loadSupabaseConfig();
     if (sbConfig.url && sbConfig.key) {
@@ -596,7 +588,6 @@ export default function App() {
                 flowsByPage={flowsByPage}
                 flows={flows}
                 interceptsByPage={interceptsByPage}
-                recordsPageId={recordsPageId}
                 recordsInvalidate={recordsInvalidate}
                 loading={loading}
                 deleteTargetId={deleteTarget?.id ?? null}
@@ -609,7 +600,6 @@ export default function App() {
                 recording={recording}
                 captureBusy={captureBusy}
                 launchMode={launchMode}
-                onSelectPage={setRecordsPageId}
                 onToggleInspector={toggleInspector}
                 onSelectFlow={handleSelectFlow}
                 onQuery={setQuery}
