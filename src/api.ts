@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { isConversationIntercept, conversationPreview } from "./lib/conversationFilter";
+import { isConversationIntercept, conversationPreview, parseConversationBodies } from "./lib/conversationFilter";
 import type {
   AppEntry,
   Flow,
@@ -373,7 +373,11 @@ export async function fetchConversationIntercepts(
   signal?: AbortSignal,
 ): Promise<InterceptedFetch[]> {
   const rows = await fetchReportedIntercepts(pageId, config, signal);
-  return rows.filter(isConversationIntercept);
+  return rows.filter((r) => {
+    if (!isConversationIntercept(r)) return false;
+    const { user, assistant, rawReq, rawResp } = parseConversationBodies(r);
+    return Boolean(user || assistant || rawReq || rawResp);
+  });
 }
 
 export async function fetchSessionRecordSummaries(
