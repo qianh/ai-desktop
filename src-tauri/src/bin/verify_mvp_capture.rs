@@ -39,7 +39,7 @@ fn run() -> Result<(), String> {
         error: None,
     })?;
 
-    let proxy = start_proxy(&paths, &session_id)?;
+    let proxy = start_proxy(&paths, &session_id, true)?;
     let proxy_port = proxy.port;
     let event_file = proxy.event_file.clone();
 

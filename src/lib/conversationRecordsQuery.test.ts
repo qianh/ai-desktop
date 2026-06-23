@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildInterceptByIdParams,
+  buildInterceptsByConversationIdParams,
   buildInterceptsByIdsParams,
   buildInterceptsQueryParams,
   CONVERSATION_URL_OR_VALUE,
+  SESSION_LIST_OR_VALUE,
   datetimeLocalToMs,
   defaultPastWeekRange,
   draftToFilter,
@@ -17,6 +19,7 @@ import {
   validateTimeRange,
 } from "./conversationRecordsQuery";
 import {
+  aggregateConversationMessages,
   classifyInterceptForStorage,
   dedupeConversationRows,
   extractConversationIdFromUrl,
@@ -25,7 +28,9 @@ import {
   isConversationPostRow,
   isConversationUrlCandidate,
   isListableConversationRow,
+  isTitleOnlyConversation,
   conversationPreview,
+  parseConversationBodies,
 } from "./conversationFilter";
 import type { InterceptedFetch } from "../types";
 
@@ -54,14 +59,17 @@ describe("buildInterceptsQueryParams", () => {
     expect(quotePostgrestId('a"b')).toBe('"a\\"b"');
   });
 
-  it("conversationListQueryOptions uses lean select and is_conversation filter", () => {
+  it("conversationListQueryOptions uses lean select and session list or filter", () => {
     const params = buildInterceptsQueryParams(
       { pageId: "p1", timeFromMs: null, timeToMs: null },
       ["p1"],
       conversationListQueryOptions(500),
     );
     expect(params.get("select")).toBe(INTERCEPTS_LIST_SELECT);
-    expect(params.get("is_conversation")).toBe("eq.true");
+    expect(params.get("or")).toBe(SESSION_LIST_OR_VALUE);
+    expect(params.get("not.or")).toBe(NOISE_URL_NOT_OR_VALUE);
+    expect(params.get("method")).toBe("in.(GET,POST)");
+    expect(params.get("is_conversation")).toBeNull();
     expect(params.get("limit")).toBe("500");
   });
 
@@ -93,6 +101,15 @@ describe("buildInterceptsByIdsParams", () => {
 });
 
 describe("isConversationUrlCandidate", () => {
+  it("matches built-in Chat POST /api/chat", () => {
+    expect(
+      isConversationUrlCandidate({
+        method: "POST",
+        url: "https://chat.worldwide-logistics.cn/api/chat",
+      }),
+    ).toBe(true);
+  });
+
   it("matches POST send-message endpoints only", () => {
     expect(
       isConversationUrlCandidate({
@@ -291,6 +308,115 @@ describe("classifyInterceptForStorage", () => {
     expect(meta.previewText).toBeTruthy();
   });
 
+  it("classifies built-in Chat /_serverFn GET with keyed Seroval as conversation", () => {
+    const meta = classifyInterceptForStorage({
+      id: "fn-1",
+      timestamp: 1,
+      url: "https://chat.worldwide-logistics.cn/_serverFn/be65b71ec49e2abd",
+      method: "GET",
+      req_headers: {},
+      req_body: null,
+      status: 200,
+      resp_headers: {},
+      resp_body:
+        '{"k":["id","userId","title","agentId","createdAt","updatedAt"],"v":[{"t":1,"s":"b6277585-0bea-45a0-9edc-da244237c1fd"},{"t":1,"s":"1000000209"},{"t":1,"s":"AEKLF股价走势"}]}',
+      duration_ms: 1,
+    });
+    expect(meta.isConversation).toBe(true);
+    expect(meta.previewText).toBe("AEKLF股价走势");
+    expect(meta.conversationId).toBe("b6277585-0bea-45a0-9edc-da244237c1fd");
+  });
+
+  it("rejects built-in Chat analytics POST on /_serverFn", () => {
+    const meta = classifyInterceptForStorage({
+      id: "fn-analytics",
+      timestamp: 1,
+      url: "https://chat.worldwide-logistics.cn/_serverFn/371350c58d85",
+      method: "POST",
+      req_headers: {},
+      req_body: JSON.stringify({ eventId: "x", access: "y" }),
+      status: 200,
+      resp_headers: {},
+      resp_body: '{"t":10,"i":0}',
+      duration_ms: 1,
+    });
+    expect(meta.isConversation).toBe(false);
+  });
+
+  it("classifies message thread GET with user text, not tool name", () => {
+    const meta = classifyInterceptForStorage({
+      id: "fn-thread",
+      timestamp: 1,
+      url: "https://chat.worldwide-logistics.cn/_serverFn/7c955775683c",
+      method: "GET",
+      req_headers: {},
+      req_body: null,
+      status: 200,
+      resp_headers: {},
+      resp_body:
+        '{"k":["id","chatId","parentId","role","parts"],"v":[{"t":1,"s":"00bb8027-5836-4e8b-8673-016bfeaf0ba7"},{"t":1,"s":"02b99671-7f71-40c1-bc23-682d774acc5e"},{"t":2,"s":0},{"t":1,"s":"user"},{"t":9,"i":3,"a":[{"t":10,"i":4,"p":{"k":["text","type"],"v":[{"t":1,"s":"AEKLF"},{"t":1,"s":"text"}]},"o":0}],"o":0}]}',
+      duration_ms: 1,
+    });
+    expect(meta.isConversation).toBe(true);
+    expect(meta.previewText).toBe("AEKLF");
+    expect(meta.conversationId).toBe("02b99671-7f71-40c1-bc23-682d774acc5e");
+  });
+
+  it("rejects chat sidebar list GET with items/nextCursor", () => {
+    const meta = classifyInterceptForStorage({
+      id: "fn-list",
+      timestamp: 1,
+      url: "https://chat.worldwide-logistics.cn/_serverFn/a2291120521dc",
+      method: "GET",
+      req_headers: {},
+      req_body: null,
+      status: 200,
+      resp_headers: {},
+      resp_body:
+        '{"k":["items","nextCursor"],"v":[{"t":9,"i":2,"a":[{"t":10,"i":3,"p":{"k":["id","userId","title"],"v":[{"t":1,"s":"b6277585-0bea-45a0-9edc-da244237c1fd"},{"t":1,"s":"1000000209"},{"t":1,"s":"AEKLF股价走势"}]}}]}]}',
+      duration_ms: 1,
+    });
+    expect(meta.isConversation).toBe(false);
+  });
+
+  it("rejects config/auth utility server-fn GET", () => {
+    const meta = classifyInterceptForStorage({
+      id: "fn-config",
+      timestamp: 1,
+      url: "https://chat.worldwide-logistics.cn/_serverFn/7eb4cd75fba5",
+      method: "GET",
+      req_headers: {},
+      req_body: null,
+      status: 200,
+      resp_headers: {},
+      resp_body:
+        '{"k":["result","error","context"],"v":[{"t":9,"i":1,"a":[{"t":10,"i":2,"p":{"k":["id","allowThinkMode","modelId"],"v":[{"t":1,"s":"x"}]}}]}]}',
+      duration_ms: 1,
+    });
+    expect(meta.isConversation).toBe(false);
+  });
+
+  it("classifies built-in Chat /api/chat POST as conversation", () => {
+    const meta = classifyInterceptForStorage({
+      id: "chat-1",
+      timestamp: 1,
+      url: "https://chat.worldwide-logistics.cn/api/chat",
+      method: "POST",
+      req_headers: {},
+      req_body: JSON.stringify({
+        id: "chat-abc",
+        messages: [{ role: "user", content: "SSD健康状态分析" }],
+      }),
+      status: 200,
+      resp_headers: {},
+      resp_body: 'data: {"type":"text-delta","delta":"ok"}',
+      duration_ms: 1,
+    });
+    expect(meta.isConversation).toBe(true);
+    expect(meta.conversationId).toBe("chat-abc");
+    expect(meta.previewText).toBe("SSD健康状态分析");
+  });
+
   it("marks GET conversation loads as conversation even without bodies", () => {
     const convId = "6a39e2c9-650c-83e8-b375-aa1b2c3d4e5f";
     const meta = classifyInterceptForStorage({
@@ -339,7 +465,88 @@ describe("extractConversationIdFromUrl", () => {
   });
 });
 
+const CHAT_ID = "b6277585-0bea-45a0-9edc-da244237c1fd";
+
+const serverFnMetaRow = (overrides: Partial<InterceptedFetch> = {}): InterceptedFetch => ({
+  id: "meta",
+  timestamp: 200,
+  url: "https://chat.worldwide-logistics.cn/_serverFn/be65b71ec49e2abd",
+  method: "GET",
+  req_headers: {},
+  req_body: null,
+  status: 200,
+  resp_headers: {},
+  resp_body:
+    `{"k":["id","userId","title","agentId","createdAt","updatedAt"],"v":[{"t":1,"s":"${CHAT_ID}"},{"t":1,"s":"1000000209"},{"t":1,"s":"AEKLF股价走势"}]}`,
+  duration_ms: 1,
+  conversation_id: CHAT_ID,
+  preview_text: "AEKLF股价走势",
+  ...overrides,
+});
+
+const serverFnThreadRow = (overrides: Partial<InterceptedFetch> = {}): InterceptedFetch => ({
+  id: "thread",
+  timestamp: 250,
+  url: "https://chat.worldwide-logistics.cn/_serverFn/7c955775683c",
+  method: "GET",
+  req_headers: {},
+  req_body: null,
+  status: 200,
+  resp_headers: {},
+  resp_body:
+    `{"k":["id","chatId","parentId","role","parts"],"v":[{"t":1,"s":"00bb8027-5836-4e8b-8673-016bfeaf0ba7"},{"t":1,"s":"${CHAT_ID}"},{"t":2,"s":0},{"t":1,"s":"user"},{"t":9,"i":3,"a":[{"t":10,"i":4,"p":{"k":["text","type"],"v":[{"t":1,"s":"AEKLF"},{"t":1,"s":"text"}]},"o":0}],"o":0},{"k":["type","text","state"],"v":[{"t":1,"s":"text"},{"t":1,"s":"港口拥堵分析结果"},{"t":1,"s":"done"}]}`,
+  duration_ms: 1,
+  conversation_id: CHAT_ID,
+  preview_text: "AEKLF",
+  ...overrides,
+});
+
+describe("aggregateConversationMessages", () => {
+  it("merges metadata and message-thread intercepts into user + assistant bubbles", () => {
+    const messages = aggregateConversationMessages([serverFnMetaRow(), serverFnThreadRow()]);
+    expect(messages).toEqual([
+      { role: "user", text: "AEKLF" },
+      { role: "assistant", text: "港口拥堵分析结果" },
+    ]);
+  });
+
+  it("keeps repeated identical messages from different intercept rows", () => {
+    const rowA = serverFnThreadRow({ id: "thread-a" });
+    const rowB = serverFnThreadRow({ id: "thread-b", timestamp: 300 });
+    const messages = aggregateConversationMessages([rowA, rowB]);
+    expect(messages.filter((m) => m.role === "user" && m.text === "AEKLF")).toHaveLength(2);
+  });
+
+  it("detects title-only metadata rows", () => {
+    expect(isTitleOnlyConversation(serverFnMetaRow())).toBe(true);
+    expect(isTitleOnlyConversation(serverFnThreadRow())).toBe(false);
+  });
+});
+
+describe("buildInterceptsByConversationIdParams", () => {
+  it("queries by conversation_id with full bodies", () => {
+    const params = buildInterceptsByConversationIdParams(CHAT_ID, "page-1");
+    expect(params.get("conversation_id")).toBe(`eq.${CHAT_ID}`);
+    expect(params.get("page_id")).toBe("eq.page-1");
+    expect(params.get("select")).toContain("req_body");
+    expect(params.get("order")).toBe("timestamp.asc");
+    expect(params.get("limit")).toBe("200");
+    expect(params.get("offset")).toBeNull();
+  });
+
+  it("supports pagination offset", () => {
+    const params = buildInterceptsByConversationIdParams(CHAT_ID, "page-1", 100, 200);
+    expect(params.get("limit")).toBe("100");
+    expect(params.get("offset")).toBe("200");
+  });
+});
+
 describe("dedupeConversationRows", () => {
+  it("prefers message-thread row over metadata row for the same conversation id", () => {
+    const deduped = dedupeConversationRows([serverFnMetaRow(), serverFnThreadRow()]);
+    expect(deduped.map((r) => r.id)).toEqual(["thread"]);
+  });
+
   it("prefers POST over GET for the same conversation id", () => {
     const id = "6a39e2c9-650c-83e8-b375-aa1b2c3d4e5f";
     const getRow: InterceptedFetch = {
@@ -398,6 +605,44 @@ describe("dedupeConversationRows", () => {
     ];
     const deduped = dedupeConversationRows(rows);
     expect(deduped.map((r) => r.id)).toEqual(["2", "3"]);
+  });
+});
+
+describe("parseConversationBodies", () => {
+  it("parses built-in Chat metadata GET seroval title for detail view", () => {
+    const bodies = parseConversationBodies({
+      id: "meta",
+      timestamp: 1,
+      url: "https://chat.worldwide-logistics.cn/_serverFn/be65b71ec49e2abd",
+      method: "GET",
+      req_headers: {},
+      req_body: null,
+      status: 200,
+      resp_headers: {},
+      resp_body:
+        '{"t":10,"i":0,"p":{"k":["result","error","context"],"v":[{"t":10,"i":1,"p":{"k":["id","userId","title","agentId","createdAt","updatedAt"],"v":[{"t":1,"s":"b6277585-0bea-45a0-9edc-da244237c1fd"},{"t":1,"s":"1000000209"},{"t":1,"s":"AEKLF股价走势"}]}}]}}',
+      duration_ms: 1,
+    });
+    expect(bodies.user).toBeNull();
+    expect(bodies.assistant).toBe("会话标题：AEKLF股价走势");
+  });
+
+  it("parses built-in Chat message thread seroval for detail view", () => {
+    const bodies = parseConversationBodies({
+      id: "thread",
+      timestamp: 1,
+      url: "https://chat.worldwide-logistics.cn/_serverFn/7c955775683c",
+      method: "GET",
+      req_headers: {},
+      req_body: null,
+      status: 200,
+      resp_headers: {},
+      resp_body:
+        '{"k":["id","chatId","parentId","role","parts"],"v":[{"t":1,"s":"00bb8027-5836-4e8b-8673-016bfeaf0ba7"},{"t":1,"s":"02b99671-7f71-40c1-bc23-682d774acc5e"},{"t":2,"s":0},{"t":1,"s":"user"},{"t":9,"i":3,"a":[{"t":10,"i":4,"p":{"k":["text","type"],"v":[{"t":1,"s":"AEKLF"},{"t":1,"s":"text"}]},"o":0}],"o":0},{"k":["type","text","state"],"v":[{"t":1,"s":"text"},{"t":1,"s":"港口拥堵分析结果"},{"t":1,"s":"done"}]}',
+      duration_ms: 1,
+    });
+    expect(bodies.user).toBe("AEKLF");
+    expect(bodies.assistant).toBe("港口拥堵分析结果");
   });
 });
 

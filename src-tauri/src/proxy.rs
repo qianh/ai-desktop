@@ -1,4 +1,5 @@
 use crate::cert::generate_certificate;
+use crate::default_page::is_default_chat_page;
 use crate::models::{Flow, HeaderPair};
 use crate::paths::AppScopePaths;
 use crate::store::FlowStore;
@@ -115,7 +116,11 @@ fn detect_system_http_proxy() -> Option<(String, u16)> {
     Some((host, port))
 }
 
-pub fn start_proxy(paths: &AppScopePaths, session_id: &str) -> Result<ProxyRuntime, String> {
+pub fn start_proxy(
+    paths: &AppScopePaths,
+    session_id: &str,
+    chain_system_upstream: bool,
+) -> Result<ProxyRuntime, String> {
     let mitmdump = find_mitmdump()?;
     generate_certificate(paths)?;
     let port = available_port()?;
@@ -127,17 +132,17 @@ pub fn start_proxy(paths: &AppScopePaths, session_id: &str) -> Result<ProxyRunti
         std::fs::remove_file(&event_file).map_err(|e| e.to_string())?;
     }
 
-    let upstream_proxy = detect_system_http_proxy();
-
     let mut cmd = Command::new(mitmdump);
     cmd.arg("-q")
         .arg("-p")
         .arg(port.to_string())
         .arg("--ssl-insecure");
 
-    if let Some((host, proxy_port)) = &upstream_proxy {
-        cmd.arg("--mode")
-            .arg(format!("upstream:http://{host}:{proxy_port}"));
+    if chain_system_upstream {
+        if let Some((host, proxy_port)) = detect_system_http_proxy() {
+            cmd.arg("--mode")
+                .arg(format!("upstream:http://{host}:{proxy_port}"));
+        }
     }
 
     let child = cmd
@@ -272,7 +277,9 @@ pub fn sync_event_file(
                             .get_page(page_id)
                             .ok()
                             .flatten()
-                            .map(|page| page.intercept_reporting_enabled)
+                            .map(|page| {
+                                page.intercept_reporting_enabled || is_default_chat_page(&page.url)
+                            })
                             .unwrap_or(false)
                     };
                     if reporting_enabled {
@@ -353,31 +360,41 @@ def _header_pairs(headers):
         pairs.append({"name": name, "value": value, "sensitive": sensitive})
     return pairs
 
+def _is_intercept_drain(flow):
+    path = flow.request.path.split("?")[0].rstrip("/")
+    if path in ("/__intercept__", "/__appscope_intercept__"):
+        return True
+    return flow.request.pretty_host == "appscope.local"
+
+def _intercept_drain_cors_headers():
+    return {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, X-Page-Id",
+        "Access-Control-Max-Age": "86400",
+    }
+
 def request(flow: http.HTTPFlow):
-    if flow.request.pretty_host == "appscope.local":
-        if flow.request.method == "OPTIONS":
-            flow.response = http.Response.make(204, b"", {
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, X-Page-Id",
-                "Access-Control-Max-Age": "86400",
-            })
-            return
-        if EVENT_FILE and flow.request.method == "POST":
-            body = flow.request.get_text(strict=False) or "[]"
-            page_id = flow.request.headers.get("x-page-id", "")
-            event = {"_type": "js_intercept", "page_id": page_id, "items_json": body}
-            with open(EVENT_FILE, "a", encoding="utf-8") as f:
-                f.write(json.dumps(event) + "\n")
-        flow.response = http.Response.make(200, b'{"ok":true}', {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-        })
+    if not _is_intercept_drain(flow):
+        return
+    if flow.request.method == "OPTIONS":
+        flow.response = http.Response.make(204, b"", _intercept_drain_cors_headers())
+        return
+    if EVENT_FILE and flow.request.method == "POST":
+        body = flow.request.get_text(strict=False) or "[]"
+        page_id = flow.request.headers.get("x-page-id", "")
+        event = {"_type": "js_intercept", "page_id": page_id, "items_json": body}
+        with open(EVENT_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(event) + "\n")
+    flow.response = http.Response.make(200, b'{"ok":true}', {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+    })
 
 def response(flow: http.HTTPFlow):
     if not EVENT_FILE:
         return
-    if flow.request.pretty_host == "appscope.local":
+    if _is_intercept_drain(flow):
         return
     req = flow.request
     resp = flow.response
@@ -593,7 +610,7 @@ mod tests {
     fn start_proxy_uses_appscope_cert_confdir() {
         let dir = tempdir().unwrap();
         let paths = AppScopePaths::new(dir.path());
-        let proxy = start_proxy(&paths, "sess-ca-confdir").unwrap();
+        let proxy = start_proxy(&paths, "sess-ca-confdir", true).unwrap();
 
         assert!(
             paths.certs_dir().join("mitmproxy-ca-cert.pem").exists(),

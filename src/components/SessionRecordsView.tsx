@@ -321,7 +321,7 @@ function SessionRecordsList({
             </div>
             <div style={{ fontWeight: 500, color: "#5a5a5e" }}>暂无符合条件的对话记录</div>
             <div style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>
-              会话记录只显示 ChatGPT 对话请求（如 /backend-api/conversation），不含统计、配置类请求。
+              会话记录显示对话类请求（ChatGPT /backend-api/conversation、内置 Chat /api/chat 等），不含统计、配置类请求。
               <br />
               可尝试：选「全部 Page」、点「清除时间」后重新查询。
             </div>

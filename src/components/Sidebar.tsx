@@ -1,6 +1,10 @@
-// Left sidebar — search, Pages, Apps, Certificates, Settings.
+// Left sidebar — search, Chat, session records, Pages, Apps, Certificates, Settings.
 import type { CSSProperties } from "react";
 import type { AppEntry, Page } from "../types";
+import {
+  DEFAULT_PAGE_DISPLAY_NAME,
+  isDefaultChatPage,
+} from "../lib/ensureDefaultPage";
 import { ACCENT, iconStyle } from "../lib/ui";
 
 const listRowStyle = (overflow: "visible" | "hidden"): CSSProperties => ({
@@ -183,8 +187,15 @@ type Props = {
   sessionRecordsActive: boolean;
 };
 
+function partitionPages(pages: Page[]) {
+  const chatPage = pages.find((pg) => isDefaultChatPage(pg.host)) ?? null;
+  const otherPages = pages.filter((pg) => !isDefaultChatPage(pg.host));
+  return { chatPage, otherPages };
+}
+
 export default function Sidebar(p: Props) {
   const sessionsMode = p.navMode === "sessions";
+  const { chatPage, otherPages } = partitionPages(p.pages);
   const navSel = (on: boolean): CSSProperties => (on ? { ...navBase, background: ACCENT + "1f" } : navBase);
   const rowSelected = (id: string) => sessionsMode && p.activeId === id;
   const listRowClass = (selected: boolean) =>
@@ -213,6 +224,22 @@ export default function Sidebar(p: Props) {
         >
           ▶
         </button>
+        {chatPage && (
+          <button
+            onClick={() => p.onSelect(chatPage.id)}
+            title={DEFAULT_PAGE_DISPLAY_NAME}
+            style={{
+              ...collapsedIconBtn(rowSelected(chatPage.id)),
+              color: chatPage.color || "#5a5a5e",
+              position: "relative",
+            }}
+          >
+            C
+            {chatPage.status === "capturing" && (
+              <span className="asc-page-status asc-page-status--live" aria-hidden />
+            )}
+          </button>
+        )}
         <button
           onClick={p.onOpenSessionRecords}
           title="会话记录"
@@ -220,7 +247,7 @@ export default function Sidebar(p: Props) {
         >
           💬
         </button>
-        {p.pages.map((pg) => {
+        {otherPages.map((pg) => {
           const sel = rowSelected(pg.id);
           const isCapturing = pg.status === "capturing";
           return (
@@ -292,6 +319,62 @@ export default function Sidebar(p: Props) {
 
       {/* scroll list */}
       <div style={{ flex: 1, overflow: "auto", minHeight: 0, padding: "2px 8px 8px" }}>
+        {chatPage && (
+          <div
+            className={listRowClass(rowSelected(chatPage.id))}
+            style={{ ...listRowStyle("visible"), marginBottom: 4 }}
+          >
+            <button onClick={() => p.onSelect(chatPage.id)} style={itemBtn}>
+              <span style={{ position: "relative", flex: "none", display: "flex" }}>
+                <span style={iconStyle(chatPage.color)}>{chatPage.letter}</span>
+                {chatPage.status === "capturing" && (
+                  <span className="asc-page-status asc-page-status--live" aria-hidden />
+                )}
+              </span>
+              <span style={{ flex: 1, textAlign: "left", minWidth: 0, overflow: "hidden" }}>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 12.5,
+                    fontWeight: 600,
+                    color: "#1d1d1f",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {DEFAULT_PAGE_DISPLAY_NAME}
+                </span>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 11,
+                    color: "#9a9aa0",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {chatPage.host}
+                </span>
+              </span>
+            </button>
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                p.onDeletePage(chatPage.id);
+              }}
+              title="Delete Page"
+              aria-label={`Delete ${DEFAULT_PAGE_DISPLAY_NAME}`}
+              className="asc-sidebar-row__delete"
+              style={deleteBtn}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <button onClick={p.onOpenSessionRecords} style={navSel(p.sessionRecordsActive)}>
           <span style={{ width: 18, textAlign: "center", fontSize: 13 }}>💬</span>
           <span style={{ flex: 1, textAlign: "left" }}>会话记录</span>
@@ -303,7 +386,7 @@ export default function Sidebar(p: Props) {
             +
           </button>
         </div>
-        {p.pages.map((pg) => {
+        {otherPages.map((pg) => {
           const sel = rowSelected(pg.id);
           const isCapturing = pg.status === "capturing";
           const reportingOn = pg.interceptReportingEnabled;

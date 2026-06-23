@@ -141,3 +141,107 @@ body {
   border: 3px solid transparent;
   background-clip: content-box;
 }
+
+/* Session record modal — rendered assistant markdown */
+.asc-conversation-md {
+  font-size: 13px;
+  line-height: 1.55;
+  color: #1d1d1f;
+  word-break: break-word;
+}
+
+.asc-conversation-md > :first-child {
+  margin-top: 0;
+}
+
+.asc-conversation-md > :last-child {
+  margin-bottom: 0;
+}
+
+.asc-conversation-md p {
+  margin: 0 0 0.65em;
+}
+
+.asc-conversation-md h1,
+.asc-conversation-md h2,
+.asc-conversation-md h3,
+.asc-conversation-md h4 {
+  margin: 0.9em 0 0.45em;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #1d1d1f;
+}
+
+.asc-conversation-md h1 { font-size: 1.15em; }
+.asc-conversation-md h2 { font-size: 1.08em; }
+.asc-conversation-md h3 { font-size: 1em; }
+
+.asc-conversation-md strong {
+  font-weight: 600;
+}
+
+.asc-conversation-md hr {
+  border: none;
+  border-top: 1px solid #e0e0e4;
+  margin: 0.75em 0;
+}
+
+.asc-conversation-md ul,
+.asc-conversation-md ol {
+  margin: 0.4em 0 0.65em;
+  padding-left: 1.35em;
+}
+
+.asc-conversation-md li {
+  margin: 0.2em 0;
+}
+
+.asc-conversation-md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0 0.75em;
+  font-size: 12px;
+}
+
+.asc-conversation-md th,
+.asc-conversation-md td {
+  border: 1px solid #e0e0e4;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.asc-conversation-md th {
+  background: #f0f0f3;
+  font-weight: 600;
+}
+
+.asc-conversation-md code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.92em;
+  background: #ebebef;
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+}
+
+.asc-conversation-md pre {
+  margin: 0.5em 0;
+  padding: 10px 12px;
+  background: #ebebef;
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.asc-conversation-md pre code {
+  background: none;
+  padding: 0;
+}
+
+.asc-conversation-md a {
+  color: #007aff;
+  text-decoration: none;
+}
+
+.asc-conversation-md a:hover {
+  text-decoration: underline;
+}

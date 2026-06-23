@@ -2,10 +2,18 @@
 type Props = {
   statusLeft: string;
   live: boolean;
+  hasPageSession?: boolean;
   proxyPort?: number | null;
   certState: string;
   quicDisabled: boolean;
 };
+
+function formatConnectionLabel(hasPageSession: boolean, proxyPort?: number | null): string {
+  if (!hasPageSession) return "proxy idle";
+  if (proxyPort === 0) return "direct";
+  if (proxyPort != null && proxyPort > 0) return `proxy 127.0.0.1:${proxyPort}`;
+  return "proxy idle";
+}
 
 function certColor(state: string): string {
   if (state === "Trusted") return "#30a14e";
@@ -13,7 +21,14 @@ function certColor(state: string): string {
   return "#8a8a8e";
 }
 
-export default function StatusBar({ statusLeft, live, proxyPort, certState, quicDisabled }: Props) {
+export default function StatusBar({
+  statusLeft,
+  live,
+  hasPageSession = false,
+  proxyPort,
+  certState,
+  quicDisabled,
+}: Props) {
   return (
     <div
       style={{
@@ -42,7 +57,7 @@ export default function StatusBar({ statusLeft, live, proxyPort, certState, quic
         {statusLeft}
       </span>
       <div style={{ flex: 1 }} />
-      <span>{proxyPort ? `proxy 127.0.0.1:${proxyPort}` : "proxy idle"}</span>
+      <span>{formatConnectionLabel(hasPageSession, proxyPort)}</span>
       <span style={{ color: "#d0d0d4" }}>·</span>
       <span style={{ color: certColor(certState) }}>CA {certState}</span>
       <span style={{ color: "#d0d0d4" }}>·</span>

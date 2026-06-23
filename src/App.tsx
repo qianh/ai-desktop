@@ -35,6 +35,14 @@ import CertManager from "./components/CertManager";
 import SessionsWorkspace from "./components/SessionsWorkspace";
 
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
+import {
+  DEFAULT_PAGE_DISPLAY_NAME,
+  ensureChatInterceptReporting,
+  ensureDefaultPage,
+  isDefaultChatPage,
+  markDefaultPageRemoved,
+  pickStartupPageId,
+} from "./lib/ensureDefaultPage";
 import AddPageModal from "./components/modals/AddPageModal";
 import AddAppModal from "./components/modals/AddAppModal";
 import CertGuideModal from "./components/modals/CertGuideModal";
@@ -124,6 +132,8 @@ export default function App() {
     (async () => {
       try {
         setLoading(true);
+        await ensureDefaultPage();
+        await ensureChatInterceptReporting();
         await Promise.all([refreshPages(), refreshApps(), refreshCert()]);
         setError(null);
       } catch (e) {
@@ -136,14 +146,15 @@ export default function App() {
 
   useEffect(() => {
     if (!activeId && pages.length > 0) {
-      setActiveId(pages[0].id);
+      const startupId = pickStartupPageId(pages);
+      if (startupId) setActiveId(startupId);
     }
   }, [activeId, pages]);
 
   useEffect(() => {
     const pollPages = pages.filter((p) => {
       if (!sessionsByPage[p.id]) return false;
-      return recording || p.interceptReportingEnabled;
+      return recording || p.interceptReportingEnabled || isDefaultChatPage(p.host);
     });
     if (!pollPages.length) return;
     const timer = window.setInterval(() => {
@@ -178,6 +189,7 @@ export default function App() {
     setActiveId(id);
     if (!app) {
       setSelectedFlowId(firstId(id));
+      autoCaptureAttempted.current.delete(id);
     }
   };
 
@@ -199,7 +211,9 @@ export default function App() {
       : recordsMode
       ? "会话记录"
       : active
-      ? active.name
+      ? isApp || !("host" in active) || !isDefaultChatPage(active.host)
+        ? active.name
+        : DEFAULT_PAGE_DISPLAY_NAME
       : "AppScope";
 
   const statusLeft = error
@@ -267,7 +281,7 @@ export default function App() {
       pendingIntercepts.current.push({ pageId, items });
       return;
     }
-    if (!page.interceptReportingEnabled) {
+    if (!page.interceptReportingEnabled && !isDefaultChatPage(page.host)) {
       console.warn(
         `[appscope][supabase] skip upload: reporting disabled for page ${pageId}`,
       );
@@ -284,6 +298,11 @@ export default function App() {
       ...prev,
       [pageId]: [...(prev[pageId] || []), ...fresh],
     }));
+
+    console.log(
+      `[appscope] received ${fresh.length} intercept(s) for page ${pageId}`,
+      fresh.map((it) => `${it.method} ${it.url.slice(0, 96)}`),
+    );
 
     const sbConfig = loadSupabaseConfig();
     if (!sbConfig.url || !sbConfig.key) {
@@ -308,6 +327,19 @@ export default function App() {
 
   const handleToggleInterceptReporting = useCallback(
     async (pageId: string, enabled: boolean) => {
+      const page = pages.find((p) => p.id === pageId);
+      if (page && isDefaultChatPage(page.host)) {
+        if (!enabled) return;
+        if (!page.interceptReportingEnabled) {
+          await setPageInterceptReporting(pageId, true);
+          setPages((prev) =>
+            prev.map((p) =>
+              p.id === pageId ? { ...p, interceptReportingEnabled: true } : p,
+            ),
+          );
+        }
+        return;
+      }
       setPages((prev) =>
         prev.map((p) => (p.id === pageId ? { ...p, interceptReportingEnabled: enabled } : p)),
       );
@@ -328,7 +360,7 @@ export default function App() {
         setError(e instanceof Error ? e.message : String(e));
       }
     },
-    [],
+    [pages],
   );
 
   useEffect(() => {
@@ -353,16 +385,24 @@ export default function App() {
   }, [pages, handleIntercepts]);
 
   const handleStartCaptureForPage = async (pageId: string) => {
-    if (captureBusy || sessionMetaByPage[pageId] || captureInFlight.current.has(pageId)) return;
+    if (captureBusy || captureInFlight.current.has(pageId)) return;
+    if (sessionMetaByPage[pageId]) return;
+
     captureInFlight.current.add(pageId);
     setCaptureBusy(true);
     setError(null);
+    let started = false;
     try {
       const session = await openPageWithCapture(pageId);
       await beginPageCapture(pageId, session);
+      started = true;
     } catch (e) {
+      autoCaptureAttempted.current.delete(pageId);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      if (!started) {
+        autoCaptureAttempted.current.delete(pageId);
+      }
       captureInFlight.current.delete(pageId);
       setCaptureBusy(false);
     }
@@ -413,12 +453,15 @@ export default function App() {
 
   const handleDeletePage = (pageId: string) => {
     const page = pages.find((p) => p.id === pageId);
-    setDeleteTarget({ id: pageId, name: page?.name || "Page" });
+    const name =
+      page && isDefaultChatPage(page.host) ? DEFAULT_PAGE_DISPLAY_NAME : page?.name || "Page";
+    setDeleteTarget({ id: pageId, name });
   };
 
   const confirmDeletePage = async () => {
     if (!deleteTarget) return;
     const pageId = deleteTarget.id;
+    const deletedPage = pages.find((p) => p.id === pageId);
 
     setError(null);
     const sessionId = sessionsByPage[pageId];
@@ -427,6 +470,10 @@ export default function App() {
     }
     await closePageWebview(pageId).catch(() => undefined);
     await removePage(pageId);
+
+    if (deletedPage && isDefaultChatPage(deletedPage.host)) {
+      markDefaultPageRemoved();
+    }
 
     const remainingPages = pages.filter((p) => p.id !== pageId);
 
@@ -666,6 +713,7 @@ export default function App() {
         <StatusBar
           statusLeft={statusLeft}
           live={recording}
+          hasPageSession={!!activeSessionMeta}
           proxyPort={activeSessionMeta?.proxyPort}
           certState={certState}
           quicDisabled={toggles.quic}

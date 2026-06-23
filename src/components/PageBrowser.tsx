@@ -407,7 +407,7 @@ export default function PageBrowser({
         </div>
       )}
       <div ref={hostRef} style={{ flex: 1, minHeight: 0, position: "relative", background: "#ffffff" }}>
-        {showChrome && status === "loading" && (
+        {layoutActive && status === "loading" && (
           <div
             style={{
               position: "absolute",
@@ -423,7 +423,7 @@ export default function PageBrowser({
             正在加载页面…
           </div>
         )}
-        {showChrome && status === "error" && (
+        {layoutActive && status === "error" && (
           <div
             style={{
               position: "absolute",

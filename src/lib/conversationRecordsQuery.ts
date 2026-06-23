@@ -61,11 +61,21 @@ export function quotePostgrestId(id: string): string {
 
 /** PostgREST or=(...) value — likely conversation endpoints (pushed to DB). */
 export const CONVERSATION_URL_OR_VALUE =
-  "(and(method.eq.POST,url.ilike.*/backend-api/conversation),and(method.eq.GET,url.ilike.*/backend-api/conversation/*),url.ilike.*/backend-api/conversation/*,url.ilike.*/backend-anon/conversation/*,url.ilike.*/api/conversation/*,url.ilike.*chatgpt.com*conversation*,url.ilike.*chat.openai.com*conversation*)";
+  "(and(method.eq.POST,url.ilike.*/backend-api/conversation),and(method.eq.GET,url.ilike.*/backend-api/conversation/*),url.ilike.*/backend-api/conversation/*,url.ilike.*/backend-anon/conversation/*,url.ilike.*/api/conversation/*,and(method.eq.POST,url.ilike.*/api/chat),url.ilike.*_serverFn*,url.ilike.*chatgpt.com*conversation*,url.ilike.*chat.openai.com*conversation*)";
 
 /** POST sends + GET single-conversation loads (historical data is often GET-only). */
 export const STRICT_CONVERSATION_URL_OR_VALUE =
-  "(and(method.eq.POST,url.ilike.*/backend-api/conversation),and(method.eq.GET,url.ilike.*/backend-api/conversation/*),and(method.eq.POST,url.ilike.*/backend-anon/conversation),and(method.eq.POST,url.ilike.*/api/conversation))";
+  "(and(method.eq.POST,url.ilike.*/backend-api/conversation),and(method.eq.GET,url.ilike.*/backend-api/conversation/*),and(method.eq.POST,url.ilike.*/backend-anon/conversation),and(method.eq.POST,url.ilike.*/api/conversation),and(method.eq.POST,url.ilike.*/api/chat),url.ilike.*_serverFn*)";
+
+/** Session list: indexed rows + legacy built-in Chat GET/POST /_serverFn/ rows misclassified at upload. */
+export const SESSION_LIST_OR_VALUE =
+  "(is_conversation.eq.true,and(method.in.(GET,POST),url.ilike.*_serverFn*))";
+
+/** Per-request page size when loading a full conversation thread. */
+export const CONVERSATION_THREAD_PAGE_SIZE = 200;
+
+/** Hard cap on related intercept rows merged into one thread. */
+export const CONVERSATION_THREAD_MAX_ROWS = 2000;
 
 /** PostgREST not.or=(...) value — exclude known analytics/noise URLs at query time. */
 export const NOISE_URL_NOT_OR_VALUE =
@@ -89,6 +99,8 @@ export type InterceptsQueryOptions = {
   select?: string;
   /** When true, filter is_conversation=eq.true (requires migration). */
   conversationOnly?: boolean;
+  /** When true, include is_conversation=true plus legacy /_serverFn/ rows. */
+  sessionListFilter?: boolean;
   /** When true, append conversation URL + noise filters for smaller result sets. */
   conversationUrlFilter?: boolean;
   /** When true, append strict conversation URL or=(...) for legacy/historical rows. */
@@ -117,6 +129,11 @@ export function appendConversationSqlFilters(params: URLSearchParams): void {
 
 export function appendStrictConversationUrlFilter(params: URLSearchParams): void {
   params.append("or", STRICT_CONVERSATION_URL_OR_VALUE);
+}
+
+export function appendSessionListFilter(params: URLSearchParams): void {
+  params.append("or", SESSION_LIST_OR_VALUE);
+  params.append("not.or", NOISE_URL_NOT_OR_VALUE);
 }
 
 export function buildInterceptsQueryParams(
@@ -150,7 +167,9 @@ export function buildInterceptsQueryParams(
     appendConversationSqlFilters(params);
   }
 
-  if (resolved.conversationOnly) {
+  if (resolved.sessionListFilter) {
+    appendSessionListFilter(params);
+  } else if (resolved.conversationOnly) {
     params.append("is_conversation", "eq.true");
   }
 
@@ -162,7 +181,8 @@ export function conversationListQueryOptions(limit: number): InterceptsQueryOpti
   return {
     limit,
     select: INTERCEPTS_LIST_SELECT,
-    conversationOnly: true,
+    sessionListFilter: true,
+    httpMethodsOnly: true,
   };
 }
 
@@ -172,6 +192,27 @@ export function buildInterceptByIdParams(id: string): URLSearchParams {
     limit: "1",
     select: INTERCEPTS_BODY_SELECT,
   });
+}
+
+export function buildInterceptsByConversationIdParams(
+  conversationId: string,
+  pageId?: string | null,
+  limit = CONVERSATION_THREAD_PAGE_SIZE,
+  offset = 0,
+): URLSearchParams {
+  const params = new URLSearchParams({
+    conversation_id: `eq.${conversationId}`,
+    order: "timestamp.asc",
+    limit: String(limit),
+    select: INTERCEPTS_BODY_SELECT,
+  });
+  if (offset > 0) {
+    params.set("offset", String(offset));
+  }
+  if (pageId) {
+    params.append("page_id", `eq.${pageId}`);
+  }
+  return params;
 }
 
 export function buildInterceptsByIdsParams(ids: string[]): URLSearchParams {

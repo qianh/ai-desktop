@@ -1,11 +1,15 @@
 import type { InterceptedFetch } from "../types";
+import { joinConversationTextChunks } from "./normalizeConversationMarkdown";
 
 const CONVERSATION_URL_PATTERNS = [
   /\/backend-api\/conversation/i,
   /\/backend-anon\/conversation/i,
   /\/api\/conversation/i,
+  /\/api\/chat\/?$/i,
+  /\/_serverFn\//i,
   /chat\.openai\.com.*conversation/i,
   /chatgpt\.com.*conversation/i,
+  /chat\.worldwide-logistics\.cn\/api\/chat/i,
 ];
 
 const NOISE_URL_PATTERNS = [
@@ -58,6 +62,187 @@ function isConversationListPath(path: string): boolean {
   return /\/conversations\/?$/i.test(path);
 }
 
+/** POST send-message for built-in worldwide-logistics Chat (AI SDK /api/chat). */
+function isApiChatPostPath(path: string): boolean {
+  return /\/api\/chat\/?$/i.test(path);
+}
+
+/** TanStack Start server functions used by built-in Chat (actual path: /_serverFn/...). */
+function isServerFnPath(path: string): boolean {
+  return /\/_serverFn\//i.test(path);
+}
+
+function isServerFnAnalyticsBody(text: string): boolean {
+  return /"eventId"/.test(text) && /"access"/.test(text) && !/"title"/.test(text);
+}
+
+/** Chat sidebar list — not a single conversation round. */
+function isServerFnChatListBody(text: string): boolean {
+  return /"k":\["items","nextCursor"\]/.test(text);
+}
+
+/** Config/auth/utility server-fn responses — not user chat. */
+function isServerFnUtilityBody(text: string): boolean {
+  if (/"k":\["authorized"\]/.test(text)) return true;
+  if (/"k":\["allowThinkMode"/.test(text)) return true;
+  if (/"t":1,"s":"inquire-quotation"/.test(text)) return true;
+  if (/"k":\["result","error","context"\][^]*?"v":\[\{"t":2,"s":1\},\{"t":2,"s":1\}/.test(text)) {
+    return true;
+  }
+  return false;
+}
+
+function isServerFnCursorOnlyBody(text: string): boolean {
+  return /"k":\["cursor"\]/.test(text);
+}
+
+/** Single chat metadata: k=["id","userId","title",...], v=[uuid, userId, title, ...]. */
+function isServerFnChatMetaBody(text: string): boolean {
+  return /"k":\["id","userId","title"/.test(text) && !isServerFnChatListBody(text);
+}
+
+/** Message thread load: k=["id","chatId","parentId","role","parts",...]. */
+function isServerFnMessageThreadBody(text: string): boolean {
+  return /"k":\["id","chatId","parentId","role","parts"/.test(text);
+}
+
+function chatIdFromKeyedSeroval(text: string): string | null {
+  const id = text.match(
+    /"k":\["id","userId","title"[^]*?"v":\[\{"t":1,"s":"([0-9a-f-]{36})"/i,
+  );
+  return id?.[1] ?? null;
+}
+
+function previewFromKeyedSeroval(text: string): string | null {
+  if (!isServerFnChatMetaBody(text)) return null;
+  const title = text.match(
+    /"k":\["id","userId","title"[^]*?"v":\[[^]*?\{"t":1,"s":"[0-9a-f-]{36}"\},\{"t":1,"s":"[^"]*"\},\{"t":1,"s":"([^"]{2,120})"/i,
+  );
+  return title?.[1] ?? null;
+}
+
+function chatIdFromMessageThreadSeroval(text: string): string | null {
+  const chatId = text.match(
+    /"k":\["id","chatId","parentId","role","parts"[^]*?"v":\[\{"t":1,"s":"[0-9a-f-]{36}"\},\{"t":1,"s":"([0-9a-f-]{36})"/i,
+  );
+  return chatId?.[1] ?? null;
+}
+
+function previewFromMessageThreadSeroval(text: string): string | null {
+  if (!isServerFnMessageThreadBody(text)) return null;
+  const users = userTextsFromMessageThreadSeroval(text);
+  if (users.length) return users[users.length - 1];
+  const assistant = assistantTextFromMessageThreadSeroval(text);
+  return assistant ? assistant.slice(0, 200) : null;
+}
+
+function unescapeSerovalString(value: string): string {
+  return value.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\");
+}
+
+function userTextsFromMessageThreadSeroval(text: string): string[] {
+  if (!isServerFnMessageThreadBody(text)) return [];
+  const users: string[] = [];
+  const re =
+    /"k":\["id","chatId","parentId","role","parts"[^]*?"v":\[[^]*?\{"t":1,"s":"user"\}[^]*?"k":\["text","type"\],"v":\[\{"t":1,"s":"([^"]+)"/gi;
+  for (const match of text.matchAll(re)) {
+    users.push(unescapeSerovalString(match[1]));
+  }
+  return users;
+}
+
+function assistantTextFromMessageThreadSeroval(text: string): string | null {
+  if (!isServerFnMessageThreadBody(text)) return null;
+  const chunks: string[] = [];
+  const re =
+    /"k":\["type","text","state"\],"v":\[\{"t":1,"s":"text"\},\{"t":1,"s":"((?:\\.|[^"\\])*)"\},\{"t":1,"s":"(?:done|streaming)"\}/g;
+  for (const match of text.matchAll(re)) {
+    const part = unescapeSerovalString(match[1]).trim();
+    if (part) chunks.push(part);
+  }
+  const joined = joinConversationTextChunks(chunks).trim();
+  return joined || null;
+}
+
+function parseServerFnConversationBodies(
+  item: InterceptedFetch,
+): { user: string | null; assistant: string | null } | null {
+  const path = urlPath(item.url).toLowerCase();
+  if (!isServerFnPath(path)) return null;
+
+  const text = item.resp_body ?? item.req_body;
+  if (!text) return null;
+
+  if (isServerFnMessageThreadBody(text)) {
+    const users = userTextsFromMessageThreadSeroval(text);
+    return {
+      user: users.length ? users.join("\n") : null,
+      assistant: assistantTextFromMessageThreadSeroval(text),
+    };
+  }
+
+  const title = previewFromKeyedSeroval(text);
+  if (title) {
+    return {
+      user: null,
+      assistant: `会话标题：${title}`,
+    };
+  }
+
+  return null;
+}
+
+function hasServerFnChatSeroval(...bodies: Array<string | null | undefined>): boolean {
+  for (const body of bodies) {
+    if (!body || isServerFnAnalyticsBody(body) || isServerFnUtilityBody(body)) continue;
+    if (isServerFnCursorOnlyBody(body) && !isServerFnChatMetaBody(body)) continue;
+    if (isServerFnChatListBody(body)) continue;
+    if (previewFromKeyedSeroval(body)) return true;
+    if (isServerFnMessageThreadBody(body)) return true;
+    if (isServerFnChatMetaBody(body) && chatIdFromKeyedSeroval(body)) return true;
+  }
+  return false;
+}
+
+export function previewFromServerFnSeroval(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const keyed = previewFromKeyedSeroval(text);
+  if (keyed) return keyed;
+  const userMsg = previewFromMessageThreadSeroval(text);
+  if (userMsg) return userMsg;
+  return null;
+}
+
+function chatIdFromServerFnSeroval(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const fromThread = chatIdFromMessageThreadSeroval(text);
+  if (fromThread) return fromThread;
+  const keyed = chatIdFromKeyedSeroval(text);
+  if (keyed) return keyed;
+  const chatId = text.match(/"chatId"[^}]*?"s":"([0-9a-f-]{36})"/i);
+  if (chatId?.[1]) return chatId[1];
+  return null;
+}
+
+/** Lean list rows may lack bodies; still show built-in Chat server-fn loads. */
+export function isServerFnListRow(item: { url: string; method: string }): boolean {
+  if (!isServerFnPath(urlPath(item.url).toLowerCase())) return false;
+  if (item.method !== "GET" && item.method !== "POST") return false;
+  return true;
+}
+
+type ConversationRowProbe = {
+  url: string;
+  method: string;
+  req_body?: string | null;
+  resp_body?: string | null;
+};
+
+function isServerFnChatRow(item: ConversationRowProbe): boolean {
+  if (!isServerFnPath(urlPath(item.url).toLowerCase())) return false;
+  return hasServerFnChatSeroval(item.req_body, item.resp_body);
+}
+
 /** ChatGPT internal protocol blobs — not user chat text */
 const NOISE_BODY_PATTERNS = [
   /conversation_detail_metadata/i,
@@ -102,6 +287,10 @@ export function isConversationUrlCandidate(item: { url: string; method: string }
     return true;
   }
 
+  if (item.method === "POST" && isApiChatPostPath(path)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -124,12 +313,14 @@ export function isConversationPostRow(item: { url: string; method: string }): bo
   return (
     /\/backend-api\/conversation\/?$/i.test(path) ||
     /\/backend-anon\/conversation\/?$/i.test(path) ||
-    /\/api\/conversation\/?$/i.test(path)
+    /\/api\/conversation\/?$/i.test(path) ||
+    isApiChatPostPath(path)
   );
 }
 
 /** List row: URL/method match is enough; bodies may be loaded on demand in the detail modal. */
-export function isListableConversationRow(item: { url: string; method: string }): boolean {
+export function isListableConversationRow(item: ConversationRowProbe): boolean {
+  if (isServerFnChatRow(item)) return true;
   return isConversationPostRow(item) || isConversationGetLoadRow(item);
 }
 
@@ -148,6 +339,26 @@ export function isConversationIntercept(item: InterceptedFetch): boolean {
 
   const req = item.req_body || "";
   const resp = item.resp_body || "";
+
+  const path = urlPath(item.url).toLowerCase();
+
+  if (isServerFnPath(path) && hasServerFnChatSeroval(req, resp)) {
+    return true;
+  }
+
+  if (item.method === "POST" && isApiChatPostPath(path)) {
+    if (req.startsWith("{")) {
+      try {
+        if (hasChatMessagesInJson(JSON.parse(req))) return true;
+      } catch {
+        // not JSON chat payload
+      }
+    }
+    if (req.includes('"messages"') && (req.includes('"role"') || req.includes('"content"'))) {
+      return true;
+    }
+    if (resp.includes("data:") && resp.includes("{")) return true;
+  }
 
   // Real chat round: POST send message (JSON) + SSE reply, or GET conversation with mapping
   if (item.method === "POST" && /\/backend-api\/conversation\/?$/i.test(url.split("?")[0])) {
@@ -460,10 +671,22 @@ export function parseConversationBodies(item: InterceptedFetch): {
         if (!assistant && pair.assistant) assistant = pair.assistant;
         if (!assistant) assistant = assistantFromJson(parsed);
       } catch {
-        if (!assistant && !isNoiseBody(body)) {
+        const seroval = parseServerFnConversationBodies(item);
+        if (seroval) {
+          if (!user && seroval.user) user = seroval.user;
+          if (!assistant && seroval.assistant) assistant = seroval.assistant;
+        } else if (!assistant && !isNoiseBody(body)) {
           rawResp = body.length <= 4000 ? body : body.slice(0, 4000) + "…";
         }
       }
+    }
+  }
+
+  if (!user && !assistant && !rawReq && !rawResp) {
+    const seroval = parseServerFnConversationBodies(item);
+    if (seroval) {
+      user = seroval.user;
+      assistant = seroval.assistant;
     }
   }
 
@@ -475,6 +698,12 @@ export function conversationMetadataPreview(item: { url: string; method: string 
   const url = item.url;
   if (item.method === "POST" && /\/backend-api\/conversation\/?$/i.test(url.split("?")[0])) {
     return "发送对话消息";
+  }
+  if (item.method === "POST" && isApiChatPostPath(urlPath(url).toLowerCase())) {
+    return "发送对话消息";
+  }
+  if (isServerFnPath(urlPath(url).toLowerCase())) {
+    return "内置 Chat 对话";
   }
   if (item.method === "GET" && /\/backend-api\/conversations?\/[0-9a-f-]{8,}/i.test(url.split("?")[0])) {
     return "加载对话记录";
@@ -499,9 +728,33 @@ export type InterceptStorageMeta = {
   conversationId: string | null;
 };
 
+function conversationIdFromIntercept(item: InterceptedFetch): string | null {
+  const fromUrl = extractConversationIdFromUrl(item.url);
+  if (fromUrl) return fromUrl;
+  const fromSeroval =
+    chatIdFromServerFnSeroval(item.resp_body) ?? chatIdFromServerFnSeroval(item.req_body);
+  if (fromSeroval) return fromSeroval;
+  if (!item.req_body?.startsWith("{")) return null;
+  try {
+    const data = JSON.parse(item.req_body) as Record<string, unknown>;
+    if (typeof data.conversation_id === "string" && data.conversation_id) {
+      return data.conversation_id;
+    }
+    if (typeof data.chatId === "string" && data.chatId) {
+      return data.chatId;
+    }
+    if (typeof data.id === "string" && data.id) {
+      return data.id;
+    }
+  } catch {
+    // ignore invalid JSON
+  }
+  return null;
+}
+
 /** Classify an intercept at upload time for indexed Supabase list queries. */
 export function classifyInterceptForStorage(item: InterceptedFetch): InterceptStorageMeta {
-  const conversationId = extractConversationIdFromUrl(item.url);
+  const conversationId = conversationIdFromIntercept(item);
 
   if (!isListableConversationRow(item)) {
     return { isConversation: false, previewText: null, conversationId };
@@ -517,21 +770,29 @@ export function classifyInterceptForStorage(item: InterceptedFetch): InterceptSt
     return { isConversation: false, previewText: null, conversationId };
   }
 
+  const serovalPreview =
+    previewFromServerFnSeroval(item.resp_body) ?? previewFromServerFnSeroval(item.req_body);
+  const resolvedConversationId = conversationId ?? conversationIdFromIntercept(item);
+
   const { user, assistant, rawReq, rawResp } = parseConversationBodies(item);
   if (!user && !assistant && !rawReq && !rawResp) {
-    if (isGetLoad) {
-      const preview = conversationTitleFromBodies(item) ?? conversationMetadataPreview(item);
+    if (isGetLoad || serovalPreview) {
+      const preview =
+        serovalPreview ??
+        conversationTitleFromBodies(item) ??
+        conversationMetadataPreview(item);
       const previewText = preview.length > 120 ? `${preview.slice(0, 120)}…` : preview;
-      return { isConversation: true, previewText, conversationId };
+      return { isConversation: true, previewText, conversationId: resolvedConversationId };
     }
-    return { isConversation: false, previewText: null, conversationId };
+    return { isConversation: false, previewText: null, conversationId: resolvedConversationId };
   }
 
   const title = conversationTitleFromBodies(item);
-  const preview = title ?? user ?? assistant ?? conversationMetadataPreview(item);
+  const preview =
+    serovalPreview ?? title ?? user ?? assistant ?? conversationMetadataPreview(item);
   const previewText = preview.length > 120 ? `${preview.slice(0, 120)}…` : preview;
 
-  return { isConversation: true, previewText, conversationId };
+  return { isConversation: true, previewText, conversationId: resolvedConversationId };
 }
 
 export function conversationPreview(item: InterceptedFetch): string {
@@ -553,23 +814,68 @@ export function conversationPreview(item: InterceptedFetch): string {
 
 export function conversationIdForRow(row: InterceptedFetch): string | null {
   if (row.conversation_id) return row.conversation_id;
-  const fromUrl = extractConversationIdFromUrl(row.url);
-  if (fromUrl) return fromUrl;
-  if (!row.req_body?.startsWith("{")) return null;
-  try {
-    const data = JSON.parse(row.req_body) as Record<string, unknown>;
-    if (typeof data.conversation_id === "string" && data.conversation_id) {
-      return data.conversation_id;
-    }
-  } catch {
-    // ignore invalid JSON
+  return conversationIdFromIntercept(row);
+}
+
+function isServerFnChatMetaRow(row: InterceptedFetch): boolean {
+  const text = row.resp_body ?? row.req_body;
+  return Boolean(text && isServerFnChatMetaBody(text) && previewFromKeyedSeroval(text));
+}
+
+export function isServerFnMessageThreadRow(row: InterceptedFetch): boolean {
+  const text = row.resp_body ?? row.req_body;
+  return Boolean(text && isServerFnMessageThreadBody(text));
+}
+
+export type ConversationMessage = { role: "user" | "assistant"; text: string };
+
+export function messagesFromIntercept(item: InterceptedFetch): ConversationMessage[] {
+  const text = item.resp_body ?? item.req_body ?? "";
+  if (isServerFnMessageThreadBody(text)) {
+    const users = userTextsFromMessageThreadSeroval(text);
+    const assistant = assistantTextFromMessageThreadSeroval(text);
+    const out: ConversationMessage[] = users.map((u) => ({ role: "user", text: u }));
+    if (assistant) out.push({ role: "assistant", text: assistant });
+    return out;
   }
-  return null;
+
+  const { user, assistant } = parseConversationBodies(item);
+  const out: ConversationMessage[] = [];
+  if (user) out.push({ role: "user", text: user });
+  if (assistant && !assistant.startsWith("会话标题：")) {
+    out.push({ role: "assistant", text: assistant });
+  }
+  return out;
+}
+
+export function aggregateConversationMessages(rows: InterceptedFetch[]): ConversationMessage[] {
+  const sorted = [...rows].sort((a, b) => a.timestamp - b.timestamp);
+  const messages: ConversationMessage[] = [];
+  const seen = new Set<string>();
+
+  for (const row of sorted) {
+    const rowMessages = messagesFromIntercept(row);
+    for (let index = 0; index < rowMessages.length; index++) {
+      const msg = rowMessages[index];
+      const key = `${row.id}:${index}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      messages.push(msg);
+    }
+  }
+  return messages;
+}
+
+export function isTitleOnlyConversation(item: InterceptedFetch): boolean {
+  const { user, assistant } = parseConversationBodies(item);
+  return !user && Boolean(assistant?.startsWith("会话标题："));
 }
 
 function conversationRowRank(row: InterceptedFetch): number {
-  if (isConversationPostRow(row)) return 3;
+  if (isConversationPostRow(row)) return 4;
+  if (isServerFnMessageThreadRow(row)) return 3;
   if (isConversationGetLoadRow(row)) return 2;
+  if (isServerFnChatMetaRow(row)) return 1;
   return 1;
 }
 

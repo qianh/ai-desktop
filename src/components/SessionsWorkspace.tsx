@@ -1,4 +1,5 @@
 import type { AppEntry, Flow, InterceptedFetch, Page } from "../types";
+import { isDefaultChatPage } from "../lib/ensureDefaultPage";
 import { derivePagePanelState, deriveWorkspaceChrome } from "../lib/pagePanelState";
 import type { NavMode } from "../lib/pagePanelState";
 import PageBrowser from "./PageBrowser";
@@ -79,8 +80,11 @@ export default function SessionsWorkspace(p: Props) {
     onClear: p.onClearFlows,
   };
 
-  const isInterceptReportingEnabled = (id: string) =>
-    p.pages.find((pg) => pg.id === id)?.interceptReportingEnabled ?? false;
+  const isInterceptReportingEnabled = (id: string) => {
+    const page = p.pages.find((pg) => pg.id === id);
+    if (page && isDefaultChatPage(page.host)) return true;
+    return page?.interceptReportingEnabled ?? false;
+  };
 
   return (
     <div style={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column" }}>

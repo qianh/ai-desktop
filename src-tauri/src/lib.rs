@@ -2,6 +2,7 @@ mod apps;
 mod cert;
 mod chrome;
 mod commands;
+mod default_page;
 mod export;
 pub mod models;
 mod page_webview;
@@ -12,7 +13,8 @@ pub mod store;
 use commands::{
     export_session, generate_certificate, get_certificate_status, get_flow_detail,
     install_certificate, launch_app_command, list_apps, list_flows, list_pages,
-    open_certificate_guide, open_page_with_capture, remove_app, remove_certificate, remove_page,
+    open_certificate_guide, open_page_with_capture, remove_app, remove_certificate,
+    remove_page,
     save_app, save_page, scan_installed_apps, set_page_intercept_reporting, stop_session,
 };
 use page_webview::{

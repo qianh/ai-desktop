@@ -1,6 +1,7 @@
 //! Tauri command surface (spec §13).
 
 use crate::apps::{launch_app, scan_installed_apps as scan_apps};
+use crate::default_page::is_default_chat_page;
 use crate::cert::{
     generate_certificate as generate_ca, get_certificate_status as ca_status,
     install_certificate as install_ca, open_certificate_guide as open_ca_guide,
@@ -275,7 +276,8 @@ pub fn open_page_with_capture_core(page_id: &str) -> Result<SessionInfo, String>
         validate_url(&page.url).map_err(|e| e.message())?;
 
         let session_id = Uuid::new_v4().to_string();
-        let proxy = start_proxy(&state.paths, &session_id).map_err(|e| {
+        let chain_upstream = !is_default_chat_page(&page.url);
+        let proxy = start_proxy(&state.paths, &session_id, chain_upstream).map_err(|e| {
             if e.contains("mitmdump not found") {
                 "ProxyNotFound: mitmdump not found".to_string()
             } else {

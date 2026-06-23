@@ -1,16 +1,24 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
+  aggregateConversationMessages,
   classifyInterceptForStorage,
+  conversationIdForRow,
   conversationTitleFromBodies,
   dedupeConversationRows,
   isConversationGetLoadRow,
   isConversationIntercept,
   isListableConversationRow,
+  isServerFnListRow,
   parseConversationBodies,
+  previewFromServerFnSeroval,
 } from "./lib/conversationFilter";
 import {
   buildInterceptByIdParams,
+  buildInterceptsByConversationIdParams,
+  buildInterceptsByIdsParams,
   buildInterceptsQueryParams,
+  CONVERSATION_THREAD_MAX_ROWS,
+  CONVERSATION_THREAD_PAGE_SIZE,
   conversationListQueryOptions,
   type ConversationRecordsFilter,
   type InterceptsQueryOptions,
@@ -501,17 +509,66 @@ async function fetchInterceptsFromSupabase(
 function filterConversationRows(rows: InterceptedFetch[]): InterceptedFetch[] {
   return rows.filter((r) => {
     if (r.is_conversation === true) return true;
-    if (r.is_conversation === false) {
-      if (isListableConversationRow(r)) {
-        if (isConversationGetLoadRow(r)) return true;
-        if (isConversationIntercept(r)) return true;
-      }
-      return false;
+    if (isListableConversationRow(r)) {
+      if (isConversationGetLoadRow(r)) return true;
+      if (isConversationIntercept(r)) return true;
     }
+    if (isServerFnListRow(r)) {
+      const preview =
+        r.preview_text?.trim() ||
+        previewFromServerFnSeroval(r.resp_body) ||
+        previewFromServerFnSeroval(r.req_body);
+      if (preview) return true;
+      if (r.conversation_id) return true;
+    }
+    if (r.is_conversation === false) return false;
     if (!isConversationIntercept(r)) return false;
     if (conversationTitleFromBodies(r)) return true;
     const { user, assistant, rawReq, rawResp } = parseConversationBodies(r);
     return Boolean(user || assistant || rawReq || rawResp);
+  });
+}
+
+async function hydrateServerFnRowBodies(
+  rows: InterceptedFetch[],
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<InterceptedFetch[]> {
+  const needsBody = rows.filter(
+    (r) =>
+      isServerFnListRow(r) &&
+      r.is_conversation !== true &&
+      !r.resp_body &&
+      !r.req_body,
+  );
+  if (needsBody.length === 0) return rows;
+
+  const ids = needsBody.map((r) => r.id);
+  const withBodies = await fetchInterceptsFromSupabase(
+    buildInterceptsByIdsParams(ids),
+    config,
+    signal,
+  );
+  const byId = new Map(withBodies.map((r) => [r.id, listRowToIntercept(r)]));
+  return rows.map((r) => {
+    const full = byId.get(r.id);
+    const merged = full
+      ? {
+          ...r,
+          req_body: full.req_body,
+          resp_body: full.resp_body,
+          preview_text: r.preview_text ?? full.preview_text,
+          conversation_id: r.conversation_id ?? full.conversation_id,
+        }
+      : r;
+    if (!isServerFnListRow(merged)) return merged;
+    const meta = classifyInterceptForStorage(merged);
+    return {
+      ...merged,
+      preview_text: merged.preview_text ?? meta.previewText,
+      conversation_id: merged.conversation_id ?? meta.conversationId,
+      is_conversation: merged.is_conversation === true ? true : meta.isConversation,
+    };
   });
 }
 
@@ -574,6 +631,7 @@ async function fetchAndFilterConversationRows(
 ): Promise<FilteredConversationResult> {
   try {
     let { rows: rawRows } = await loadConversationListRows(filter, allPageIds, config, signal);
+    rawRows = await hydrateServerFnRowBodies(rawRows, config, signal);
     let normalized = normalizeInterceptRows(rawRows);
     let timeFiltered = applyClientTimeFilter(normalized, filter);
 
@@ -584,6 +642,7 @@ async function fetchAndFilterConversationRows(
         config,
         signal,
       ));
+      rawRows = await hydrateServerFnRowBodies(rawRows, config, signal);
       normalized = normalizeInterceptRows(rawRows);
       timeFiltered = applyClientTimeFilter(normalized, filter);
     }
@@ -639,12 +698,14 @@ async function fetchPerPageMerged(
   }
 
   let rawRows = await loadRows(filter);
+  rawRows = await hydrateServerFnRowBodies(rawRows, config, signal);
   let normalized = normalizeInterceptRows(rawRows);
   let timeFiltered = applyClientTimeFilter(normalized, filter);
 
   if (timeFiltered.length === 0 && hasTimeFilter(filter)) {
     const noTime = { ...filter, timeFromMs: null, timeToMs: null };
     rawRows = await loadRows(noTime);
+    rawRows = await hydrateServerFnRowBodies(rawRows, config, signal);
     normalized = normalizeInterceptRows(rawRows);
     timeFiltered = applyClientTimeFilter(normalized, filter);
   }
@@ -658,7 +719,80 @@ export async function fetchInterceptById(
   signal?: AbortSignal,
 ): Promise<InterceptedFetch | null> {
   const rows = await fetchInterceptsFromSupabase(buildInterceptByIdParams(id), config, signal);
-  return rows[0] ?? null;
+  const row = rows[0];
+  return row ? listRowToIntercept(row) : null;
+}
+
+export async function fetchInterceptsByConversationId(
+  conversationId: string,
+  config: SupabaseConfig,
+  options?: { pageId?: string | null; signal?: AbortSignal; limit?: number },
+): Promise<{ rows: InterceptedFetch[]; truncated: boolean }> {
+  const pageSize = options?.limit ?? CONVERSATION_THREAD_PAGE_SIZE;
+  const rows: InterceptedFetch[] = [];
+  let offset = 0;
+  let truncated = false;
+
+  while (rows.length < CONVERSATION_THREAD_MAX_ROWS) {
+    const params = buildInterceptsByConversationIdParams(
+      conversationId,
+      options?.pageId,
+      pageSize,
+      offset,
+    );
+    const batch = (await fetchInterceptsFromSupabase(params, config, options?.signal)).map(
+      listRowToIntercept,
+    );
+    rows.push(...batch);
+    if (batch.length < pageSize) break;
+    offset += pageSize;
+    if (rows.length >= CONVERSATION_THREAD_MAX_ROWS) {
+      truncated = true;
+      break;
+    }
+  }
+
+  return { rows, truncated };
+}
+
+export type ResolvedConversationMessages = {
+  messages: ReturnType<typeof aggregateConversationMessages>;
+  partial: boolean;
+  loadError?: string;
+};
+
+export async function resolveConversationMessages(
+  record: InterceptedFetch,
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<ResolvedConversationMessages> {
+  const conversationId = conversationIdForRow(record);
+  if (!conversationId || !config.url || !config.key) {
+    return { messages: aggregateConversationMessages([record]), partial: false };
+  }
+
+  try {
+    const { rows: related, truncated } = await fetchInterceptsByConversationId(
+      conversationId,
+      config,
+      { pageId: record.page_id, signal },
+    );
+    const byId = new Map<string, InterceptedFetch>();
+    byId.set(record.id, record);
+    for (const row of related) {
+      byId.set(row.id, row);
+    }
+    return {
+      messages: aggregateConversationMessages([...byId.values()]),
+      partial: truncated,
+    };
+  } catch (error) {
+    return {
+      messages: aggregateConversationMessages([record]),
+      partial: true,
+      loadError: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export async function fetchFilteredConversationIntercepts(

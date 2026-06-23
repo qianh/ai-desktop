@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchFilteredConversationIntercepts } from "./api";
-import { INTERCEPTS_LIST_SELECT } from "./lib/conversationRecordsQuery";
+import { INTERCEPTS_LIST_SELECT, SESSION_LIST_OR_VALUE } from "./lib/conversationRecordsQuery";
 
 import type { SupabaseConfig } from "./lib/supabase";
 
@@ -30,7 +30,7 @@ describe("fetchFilteredConversationIntercepts", () => {
     vi.unstubAllGlobals();
   });
 
-  it("uses lean list select and is_conversation filter (no bodies)", async () => {
+  it("uses lean list select and session list or filter (no bodies)", async () => {
     const calls: string[] = [];
     mockFetch((url) => {
       calls.push(decodeURIComponent(url));
@@ -65,13 +65,61 @@ describe("fetchFilteredConversationIntercepts", () => {
     );
 
     expect(calls[0]).toContain(`select=${INTERCEPTS_LIST_SELECT}`);
-    expect(calls[0]).toContain("is_conversation=eq.true");
+    expect(calls[0]).toContain(`or=${SESSION_LIST_OR_VALUE}`);
+    expect(calls[0]).not.toContain("is_conversation=eq.true");
     expect(calls[0]).not.toContain("or=(and(method.eq.POST");
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].id).toBe("r1");
     expect(result.rows[0].preview_text).toBe("SSD健康状态分析");
     expect(result.rows[0].req_body).toBeNull();
     expect(result.rows[0].resp_body).toBeNull();
+  });
+
+  it("hydrates legacy /_serverFn rows and classifies keyed Seroval chat loads", async () => {
+    const calls: string[] = [];
+    mockFetch((url) => {
+      calls.push(decodeURIComponent(url));
+      if (url.includes("id=in.")) {
+        return jsonResponse([
+          {
+            id: "chat-get",
+            timestamp: 300,
+            url: "/_serverFn/be65b71ec49e2abd",
+            method: "GET",
+            page_id: "p1",
+            req_body: null,
+            resp_body:
+              '{"k":["id","userId","title","agentId","createdAt","updatedAt"],"v":[{"t":1,"s":"b6277585-0bea-45a0-9edc-da244237c1fd"},{"t":1,"s":"1000000209"},{"t":1,"s":"AEKLF股价走势"}]}',
+            preview_text: null,
+            is_conversation: false,
+            conversation_id: null,
+          },
+        ]);
+      }
+      return jsonResponse([
+        {
+          id: "chat-get",
+          timestamp: 300,
+          url: "/_serverFn/be65b71ec49e2abd",
+          method: "GET",
+          page_id: "p1",
+          preview_text: null,
+          is_conversation: false,
+          conversation_id: null,
+        },
+      ]);
+    });
+
+    const result = await fetchFilteredConversationIntercepts(
+      { pageId: "p1", timeFromMs: null, timeToMs: null },
+      ["p1"],
+      config,
+    );
+
+    expect(calls.some((u) => u.includes("id=in."))).toBe(true);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].preview_text).toBe("AEKLF股价走势");
+    expect(result.rows[0].conversation_id).toBe("b6277585-0bea-45a0-9edc-da244237c1fd");
   });
 
   it("normalizes epoch-second timestamps and applies client-side time filter", async () => {

@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
-import { fetchInterceptById } from "../../api";
+import { fetchInterceptById, resolveConversationMessages } from "../../api";
 import { formatTimestamp } from "../../lib/format";
-import { parseConversationBodies } from "../../lib/conversationFilter";
+import {
+  parseConversationBodies,
+  type ConversationMessage,
+} from "../../lib/conversationFilter";
 import { loadSupabaseConfig, type SupabaseConfig } from "../../lib/supabase";
 import { truncateBody } from "../../lib/truncate";
 import { ACCENT } from "../../lib/ui";
 import type { InterceptedFetch } from "../../types";
+import ConversationMarkdown from "../ConversationMarkdown";
+
+const MODAL_VIEWPORT_HEIGHT = "80vh";
 
 function hasAnyBody(record: InterceptedFetch): boolean {
   return record.req_body != null || record.resp_body != null;
@@ -28,7 +34,13 @@ function Bubble({
 }) {
   const isUser = role === "user";
   const [expanded, setExpanded] = useState(false);
-  const preview = expanded ? { text: body || "—", truncated: false } : truncateBody(body);
+  const text = body || "—";
+  const preview = isUser
+    ? expanded
+      ? { text, truncated: false }
+      : truncateBody(body)
+    : { text, truncated: false };
+  const useMarkdown = !isUser;
 
   return (
     <div
@@ -42,23 +54,23 @@ function Bubble({
       <span style={{ fontSize: 10, color: "#9a9aa0", marginBottom: 2 }}>{label}</span>
       <div
         style={{
-          maxWidth: "88%",
+          maxWidth: isUser ? "88%" : "96%",
           padding: "10px 12px",
           borderRadius: 12,
           background: isUser ? "#e8f0fe" : "#f3f3f5",
           border: `1px solid ${isUser ? "#c5d9f8" : "#e0e0e4"}`,
           fontSize: 13,
           lineHeight: 1.5,
-          whiteSpace: "pre-wrap",
+          whiteSpace: useMarkdown ? "normal" : "pre-wrap",
           wordBreak: "break-word",
           color: "#1d1d1f",
-          maxHeight: expanded ? 480 : undefined,
-          overflow: expanded ? "auto" : undefined,
+          maxHeight: isUser && expanded ? "40vh" : undefined,
+          overflow: isUser && expanded ? "auto" : undefined,
         }}
       >
-        {preview.text}
+        {useMarkdown ? <ConversationMarkdown content={preview.text} /> : preview.text}
       </div>
-      {preview.truncated && (
+      {isUser && preview.truncated && (
         <button
           type="button"
           onClick={() => setExpanded(true)}
@@ -83,8 +95,10 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
   const [record, setRecord] = useState<InterceptedFetch | null>(
     hasAnyBody(initialRecord) ? initialRecord : null,
   );
+  const [messages, setMessages] = useState<ConversationMessage[] | null>(null);
   const [loading, setLoading] = useState(!hasAnyBody(initialRecord));
   const [error, setError] = useState<string | null>(null);
+  const [threadWarning, setThreadWarning] = useState<string | null>(null);
   const resolvedConfig = config ?? loadSupabaseConfig();
   const display = record ?? initialRecord;
   const bodies = display.req_body != null || display.resp_body != null
@@ -101,20 +115,15 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
   }, [onClose]);
 
   useEffect(() => {
+    setMessages(null);
     if (hasAnyBody(initialRecord)) {
       setRecord(initialRecord);
-      setLoading(false);
-      setError(null);
       return;
     }
     setRecord(null);
-    setLoading(true);
-    setError(null);
   }, [initialRecord.id, initialRecord.req_body, initialRecord.resp_body]);
 
   useEffect(() => {
-    if (hasAnyBody(initialRecord)) return;
-
     if (!resolvedConfig.url || !resolvedConfig.key) {
       setLoading(false);
       setError("未配置 Supabase");
@@ -122,34 +131,52 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
     }
 
     const ac = new AbortController();
-    setLoading(true);
-    setError(null);
-    setRecord(null);
 
-    fetchInterceptById(initialRecord.id, resolvedConfig, ac.signal)
-      .then((row) => {
-        if (ac.signal.aborted) return;
-        if (!row) {
-          setError("记录不存在或已被删除");
-          return;
+    async function loadDetail() {
+      setLoading(true);
+      setError(null);
+      setThreadWarning(null);
+      setMessages(null);
+
+      try {
+        let loaded = hasAnyBody(initialRecord) ? initialRecord : null;
+        if (!loaded) {
+          const row = await fetchInterceptById(initialRecord.id, resolvedConfig, ac.signal);
+          if (ac.signal.aborted) return;
+          if (!row) {
+            setError("记录不存在或已被删除");
+            return;
+          }
+          loaded = {
+            ...row,
+            req_body: row.req_body ?? initialRecord.req_body,
+            resp_body: row.resp_body ?? initialRecord.resp_body,
+          };
         }
-        setRecord({
-          ...row,
-          req_body: row.req_body ?? initialRecord.req_body,
-          resp_body: row.resp_body ?? initialRecord.resp_body,
-        });
-      })
-      .catch((e) => {
+
+        if (ac.signal.aborted) return;
+        setRecord(loaded);
+
+        const thread = await resolveConversationMessages(loaded, resolvedConfig, ac.signal);
+        if (ac.signal.aborted) return;
+        setMessages(thread.messages);
+        if (thread.loadError) {
+          setThreadWarning(`部分对话记录加载失败：${thread.loadError}`);
+        } else if (thread.partial) {
+          setThreadWarning("对话记录过多，仅显示部分内容");
+        }
+      } catch (e) {
         if (ac.signal.aborted) return;
         if (e instanceof Error && e.name === "AbortError") return;
         setError(e instanceof Error ? e.message : String(e));
-      })
-      .finally(() => {
+      } finally {
         if (!ac.signal.aborted) setLoading(false);
-      });
+      }
+    }
 
+    void loadDetail();
     return () => ac.abort();
-  }, [initialRecord.id, initialRecord.req_body, initialRecord.resp_body, resolvedConfig.url, resolvedConfig.key]);
+  }, [initialRecord, resolvedConfig.url, resolvedConfig.key]);
 
   return (
     <div
@@ -157,7 +184,8 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
       style={{
         width: 1120,
         maxWidth: "96vw",
-        maxHeight: "85vh",
+        height: MODAL_VIEWPORT_HEIGHT,
+        maxHeight: MODAL_VIEWPORT_HEIGHT,
         background: "#fff",
         borderRadius: 13,
         boxShadow: "0 24px 60px rgba(0,0,0,.4)",
@@ -203,27 +231,57 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
         </button>
       </div>
 
-      <div style={{ flex: 1, overflow: "auto", padding: "16px 20px" }}>
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "16px 20px" }}>
         {loading && (
           <div style={{ fontSize: 12, color: "#9a9aa0" }}>加载对话内容…</div>
         )}
         {error && !loading && (
           <div style={{ fontSize: 12, color: "#d23b30" }}>{error}</div>
         )}
-        {!loading && !error && bodies && (
+        {threadWarning && !loading && !error && (
+          <div style={{ fontSize: 12, color: "#b45309", marginBottom: 10 }}>{threadWarning}</div>
+        )}
+        {!loading && !error && messages && messages.length > 0 && (
+          <>
+            {messages.map((msg, index) => (
+              <Bubble
+                key={`${msg.role}-${index}`}
+                role={msg.role}
+                label={msg.role === "user" ? "用户" : "AI"}
+                body={msg.text}
+              />
+            ))}
+          </>
+        )}
+        {!loading && !error && (!messages || messages.length === 0) && bodies && (
           <>
             {bodies.user && <Bubble role="user" label="用户" body={bodies.user} />}
-            {bodies.assistant && <Bubble role="assistant" label="AI" body={bodies.assistant} />}
+            {bodies.assistant && (
+              <Bubble
+                role="assistant"
+                label={bodies.assistant.startsWith("会话标题：") ? "会话" : "AI"}
+                body={bodies.assistant}
+              />
+            )}
             {!bodies.user && !bodies.assistant && bodies.rawReq && (
               <Bubble role="user" label="请求体（未识别为对话）" body={bodies.rawReq} />
             )}
             {!bodies.user && !bodies.assistant && bodies.rawResp && (
               <Bubble role="assistant" label="响应体（未识别为对话）" body={bodies.rawResp} />
             )}
-            {!bodies.user && !bodies.assistant && !bodies.rawReq && !bodies.rawResp && (
+            {!bodies.user && !bodies.assistant && !bodies.rawReq && !bodies.rawResp && display.preview_text && (
+              <Bubble role="assistant" label="会话" body={display.preview_text} />
+            )}
+            {!bodies.user && !bodies.assistant && !bodies.rawReq && !bodies.rawResp && !display.preview_text && (
               <div style={{ fontSize: 12, color: "#9a9aa0" }}>（无请求/响应 body）</div>
             )}
           </>
+        )}
+        {!loading && !error && (!messages || messages.length === 0) && !bodies && display.preview_text && (
+          <Bubble role="assistant" label="会话" body={display.preview_text} />
+        )}
+        {!loading && !error && (!messages || messages.length === 0) && !bodies && !display.preview_text && (
+          <div style={{ fontSize: 12, color: "#9a9aa0" }}>（无请求/响应 body）</div>
         )}
       </div>
     </div>

@@ -1,6 +1,7 @@
 use tauri::webview::WebviewBuilder;
 use tauri::Emitter;
 use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl};
+use tauri::webview::Color;
 
 const PAGE_WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 
@@ -76,8 +77,6 @@ pub fn mount_page_webview(
         .ok_or_else(|| "main window not found".to_string())?;
 
     let target = url::Url::parse(&url).map_err(|e| format!("invalid url: {e}"))?;
-    let proxy = url::Url::parse(&format!("http://127.0.0.1:{proxy_port}"))
-        .map_err(|e| format!("invalid proxy url: {e}"))?;
 
     let load_app = app.clone();
     let load_page_id = page_id.clone();
@@ -87,13 +86,21 @@ pub fn mount_page_webview(
     let nav_label = label.clone();
 
     let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(target.clone()))
-        .proxy_url(proxy)
         .user_agent(PAGE_WEBVIEW_USER_AGENT)
+        .background_color(Color(255, 255, 255, 255));
+    if proxy_port > 0 {
+        let proxy = url::Url::parse(&format!("http://127.0.0.1:{proxy_port}"))
+            .map_err(|e| format!("invalid proxy url: {e}"))?;
+        builder = builder.proxy_url(proxy);
+    }
+    let mut builder = builder
         .focused(true)
         .zoom_hotkeys_enabled(true);
-    if let Some(intercept_script) =
-        intercept_script_if_enabled(intercept_reporting_enabled, &page_id)
-    {
+    if let Some(intercept_script) = intercept_script_if_enabled(
+        intercept_reporting_enabled,
+        &page_id,
+        proxy_port,
+    ) {
         builder = builder.initialization_script(&intercept_script);
     }
     let builder = builder
@@ -204,7 +211,7 @@ pub fn sync_page_webview_bounds(
 }
 
 
-fn make_intercept_script(page_id: &str) -> String {
+fn make_intercept_script(page_id: &str, _proxy_port: u16) -> String {
     format!(
         r#"
 (function() {{
@@ -213,6 +220,8 @@ fn make_intercept_script(page_id: &str) -> String {
     console.log('[appscope] intercept script injected, page_id=' + '{page_id}');
 
     var PAGE_ID = '{page_id}';
+    // Same-origin HTTPS path — avoids mixed-content block on HTTPS chat pages.
+    var DRAIN_URL = '/__appscope_intercept__';
     var MAX_BODY_SIZE = 50000;
     var originalFetch = window.fetch;
     var pending = [];
@@ -248,8 +257,8 @@ fn make_intercept_script(page_id: &str) -> String {
         }}
         if (pending.length === 0) return;
         var batch = pending.splice(0);
-        console.log('[appscope] sending ' + batch.length + ' items to appscope.local');
-        originalFetch.call(window, 'https://appscope.local/__intercept__', {{
+        console.log('[appscope] sending ' + batch.length + ' items to ' + DRAIN_URL);
+        originalFetch.call(window, DRAIN_URL, {{
             method: 'POST',
             headers: {{'Content-Type': 'application/json', 'X-Page-Id': PAGE_ID}},
             body: JSON.stringify(batch),
@@ -266,7 +275,9 @@ fn make_intercept_script(page_id: &str) -> String {
         var init = args[1] || {{}};
         var url = typeof input === 'string' ? input : (input && input.url ? input.url : String(input));
 
-        if (url.indexOf('appscope.local') !== -1) {{
+        if (url.indexOf('/__appscope_intercept__') !== -1
+            || url.indexOf('/__intercept__') !== -1
+            || url.indexOf('appscope.local') !== -1) {{
             return originalFetch.apply(this, args);
         }}
 
@@ -363,25 +374,26 @@ mod tests {
 
     #[test]
     fn intercept_script_contains_key_parts() {
-        let script = super::make_intercept_script("test-page-id");
+        let script = super::make_intercept_script("test-page-id", 61651);
         assert!(script.contains("__APPSCOPE_INTERCEPT_INIT__"));
         assert!(script.contains("window.fetch"));
         assert!(script.contains("originalFetch"));
-        assert!(script.contains("appscope.local"));
+        assert!(script.contains("/__appscope_intercept__"));
         assert!(script.contains("test-page-id"));
     }
 
     #[test]
     fn intercept_script_handles_streaming() {
-        let script = super::make_intercept_script("test");
+        let script = super::make_intercept_script("test", 8080);
         assert!(script.contains("text/event-stream"));
         assert!(script.contains("getReader"));
     }
 
     #[test]
     fn intercept_script_optional_when_disabled() {
-        assert!(super::intercept_script_if_enabled(false, "page-1").is_none());
-        let script = super::intercept_script_if_enabled(true, "page-1").expect("script");
+        assert!(super::intercept_script_if_enabled(false, "page-1", 8080).is_none());
+        assert!(super::intercept_script_if_enabled(true, "page-1", 0).is_none());
+        let script = super::intercept_script_if_enabled(true, "page-1", 8080).expect("script");
         assert!(script.contains("__APPSCOPE_INTERCEPT_INIT__"));
         assert!(script.contains("page-1"));
     }
@@ -390,9 +402,10 @@ mod tests {
 pub(crate) fn intercept_script_if_enabled(
     intercept_reporting_enabled: bool,
     page_id: &str,
+    proxy_port: u16,
 ) -> Option<String> {
-    if intercept_reporting_enabled {
-        Some(make_intercept_script(page_id))
+    if intercept_reporting_enabled && proxy_port > 0 {
+        Some(make_intercept_script(page_id, proxy_port))
     } else {
         None
     }
