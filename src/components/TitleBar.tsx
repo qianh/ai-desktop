@@ -1,18 +1,30 @@
 // macOS window title bar with traffic lights + A/B layout toggle.
 import { segStyle } from "../lib/ui";
 
+const iconSegStyle = (active: boolean) => ({
+  ...segStyle(active),
+  border: "0.5px solid #c4c4c8",
+  display: "flex" as const,
+  alignItems: "center" as const,
+  gap: 4,
+});
+
 export default function TitleBar({
   titleSuffix,
   variant,
   onVariant,
   inspectorOpen,
   onToggleInspector,
+  onOpenSessionRecords,
+  sessionRecordsActive,
 }: {
   titleSuffix: string;
   variant: "A" | "B";
   onVariant: (v: "A" | "B") => void;
   inspectorOpen: boolean;
   onToggleInspector: () => void;
+  onOpenSessionRecords: () => void;
+  sessionRecordsActive: boolean;
 }) {
   return (
     <div
@@ -32,6 +44,13 @@ export default function TitleBar({
         <span style={{ fontSize: 12.5, color: "#9a9aa0" }}>— {titleSuffix}</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          onClick={onOpenSessionRecords}
+          title="会话记录"
+          style={iconSegStyle(sessionRecordsActive)}
+        >
+          💬 会话记录
+        </button>
         <span style={{ fontSize: 11, color: "#9a9aa0" }}>布局</span>
         <div style={{ display: "flex", background: "#d9d9de", borderRadius: 7, padding: 2, gap: 2 }}>
           <button onClick={() => onVariant("A")} style={segStyle(variant === "A")}>
@@ -44,7 +63,7 @@ export default function TitleBar({
         <button
           onClick={onToggleInspector}
           title={inspectorOpen ? "收起右侧面板" : "展开右侧面板"}
-          style={{ ...segStyle(inspectorOpen), border: "0.5px solid #c4c4c8", display: "flex", alignItems: "center", gap: 4 }}
+          style={iconSegStyle(inspectorOpen)}
         >
           {inspectorOpen ? "▶" : "◀"}
         </button>

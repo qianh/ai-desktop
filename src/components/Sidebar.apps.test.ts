@@ -20,8 +20,6 @@ describe("Sidebar app feature removal", () => {
         onAddPage: () => undefined,
         onCerts: () => undefined,
         onSettings: () => undefined,
-        onOpenSessionRecords: () => undefined,
-        sessionRecordsActive: false,
       }),
     );
 

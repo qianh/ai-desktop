@@ -544,6 +544,8 @@ export default function App() {
           onVariant={setVariant}
           inspectorOpen={inspectorOpen}
           onToggleInspector={toggleInspector}
+          onOpenSessionRecords={handleOpenSessionRecords}
+          sessionRecordsActive={recordsMode}
         />
 
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
@@ -556,8 +558,6 @@ export default function App() {
             onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
             onQuery={setQuery}
             onSelect={selectSession}
-            onOpenSessionRecords={handleOpenSessionRecords}
-            sessionRecordsActive={recordsMode}
             onDeletePage={handleDeletePage}
             onToggleInterceptReporting={handleToggleInterceptReporting}
             onAddPage={() => setModal("addPage")}

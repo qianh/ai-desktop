@@ -3,6 +3,7 @@ import { REPORTED_INTERCEPTS_LIMIT, type ConversationTruncationReason } from "..
 import { formatTimestamp } from "../lib/format";
 import { conversationPreview } from "../lib/conversationFilter";
 import {
+  defaultPastWeekRange,
   draftToFilter,
   validateTimeRange,
   type ConversationRecordsFilter,
@@ -441,11 +442,12 @@ export default function SessionRecordsView({ pages }: Props) {
   const unconfigured = !config.url || !config.key;
 
   const [draftPageId, setDraftPageId] = useState<string | null>(null);
-  const [draftTimeFrom, setDraftTimeFrom] = useState("");
-  const [draftTimeTo, setDraftTimeTo] = useState("");
+  const { from: defaultFrom, to: defaultTo } = useMemo(() => defaultPastWeekRange(), []);
+  const [draftTimeFrom, setDraftTimeFrom] = useState(defaultFrom);
+  const [draftTimeTo, setDraftTimeTo] = useState(defaultTo);
 
   const [appliedFilter, setAppliedFilter] = useState<ConversationRecordsFilter>(() =>
-    draftToFilter(null, "", ""),
+    draftToFilter(null, defaultFrom, defaultTo),
   );
   const [queryToken, setQueryToken] = useState(1);
   const [filterError, setFilterError] = useState<string | null>(null);

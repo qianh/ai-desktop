@@ -180,8 +180,6 @@ type Props = {
   onAddPage: () => void;
   onCerts: () => void;
   onSettings: () => void;
-  onOpenSessionRecords: () => void;
-  sessionRecordsActive: boolean;
 };
 
 function partitionPages(pages: Page[]) {
@@ -237,13 +235,6 @@ export default function Sidebar(p: Props) {
             )}
           </button>
         )}
-        <button
-          onClick={p.onOpenSessionRecords}
-          title="会话记录"
-          style={{ ...collapseToggle, background: p.sessionRecordsActive ? ACCENT + "1f" : "none" }}
-        >
-          💬
-        </button>
         {otherPages.map((pg) => {
           const sel = rowSelected(pg.id);
           const isCapturing = pg.status === "capturing";
@@ -361,11 +352,6 @@ export default function Sidebar(p: Props) {
             </button>
           </div>
         )}
-
-        <button onClick={p.onOpenSessionRecords} style={navSel(p.sessionRecordsActive)}>
-          <span style={{ width: 18, textAlign: "center", fontSize: 13 }}>💬</span>
-          <span style={{ flex: 1, textAlign: "left" }}>会话记录</span>
-        </button>
 
         <div style={sectionHeader}>
           <span style={sectionLabel}>Pages</span>
