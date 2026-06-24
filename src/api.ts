@@ -33,6 +33,11 @@ import type {
 } from "./types";
 import { fmtSize } from "./lib/format";
 import type { SupabaseConfig } from "./lib/supabase";
+import {
+  sanitizeInterceptForUpload,
+  sanitizePostgresText,
+  stripNullBytes,
+} from "./lib/sanitizeForUpload";
 
 export function isTauriRuntime(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -347,12 +352,14 @@ export async function uploadInterceptsToSupabase(
   const base = config.url.replace(/\/$/, "");
   const rows = items.map((item) => {
     const meta = classifyInterceptForStorage(item);
+    const sanitized = sanitizeInterceptForUpload(item);
     return {
-      ...item,
+      ...sanitized,
       page_id: pageId,
-      preview_text: meta.previewText,
+      preview_text: sanitizePostgresText(meta.previewText),
       is_conversation: meta.isConversation,
-      conversation_id: meta.conversationId,
+      conversation_id:
+        meta.conversationId != null ? stripNullBytes(meta.conversationId) : meta.conversationId,
     };
   });
   const resp = await fetch(`${base}/rest/v1/intercepts`, {

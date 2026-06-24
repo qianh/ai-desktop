@@ -96,6 +96,111 @@ function isServerFnCursorOnlyBody(text: string): boolean {
   return /"k":\["cursor"\]/.test(text);
 }
 
+
+/**
+ * Extract all top-level text strings from a "parts":[...] array in partial/truncated JSON.
+ * Skips nested objects (thinking blocks etc.) using depth tracking.
+ * bodyStart points to the character immediately after the opening '['.
+ */
+function extractPartsStrings(body: string, bodyStart: number): string[] {
+  const strings: string[] = [];
+  let i = bodyStart;
+  let depth = 0;
+
+  while (i < body.length) {
+    const ch = body[i];
+    if (ch === "{" || ch === "[") { depth++; i++; continue; }
+    if (ch === "}" || ch === "]") {
+      if (depth === 0) break;
+      depth--;
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      i++; // skip opening quote
+      let str = "";
+      while (i < body.length) {
+        if (body[i] === "\\") {
+          const esc = body[i + 1];
+          if (esc === "n") str += "\n";
+          else if (esc === "r") str += "\r";
+          else if (esc === "t") str += "\t";
+          else if (esc === '"') str += '"';
+          else if (esc === "\\") str += "\\";
+          else str += esc ?? "";
+          i += 2;
+        } else if (body[i] === '"') {
+          i++;
+          break;
+        } else {
+          str += body[i];
+          i++;
+        }
+      }
+      if (depth === 0) {
+        // Only capture values, not JSON keys (keys are followed by ':')
+        let j = i;
+        while (j < body.length && (body[j] === " " || body[j] === "\t" || body[j] === "\n" || body[j] === "\r")) j++;
+        if (body[j] !== ":" && str.trim()) {
+          strings.push(str.trim());
+        }
+      }
+    } else {
+      i++;
+    }
+  }
+  return strings;
+}
+
+/**
+ * Regex-based extraction for truncated ChatGPT GET /conversation responses.
+ * Called when JSON.parse fails (body ends with "...[truncated]").
+ * Handles thinking-model responses where parts = [intro, {thinking}, main_response].
+ */
+function extractFromTruncatedMappingBody(body: string): {
+  user: string | null;
+  assistant: string | null;
+} {
+  if (!body.includes('"mapping"') || !body.includes('"content_type"')) {
+    return { user: null, assistant: null };
+  }
+
+  type Entry = { text: string; time: number };
+  const userEntries: Entry[] = [];
+  const assistantEntries: Entry[] = [];
+  const textContentRe = /"content_type"\s*:\s*"text"\s*,\s*"parts"\s*:\s*\[/;
+
+  const processRole = (role: string, entries: Entry[], windowSize: number) => {
+    const roleRe = new RegExp(`"role"\\s*:\\s*"${role}"`, "g");
+    let m: RegExpExecArray | null;
+    while ((m = roleRe.exec(body)) !== null) {
+      const ctxEnd = Math.min(body.length, m.index + windowSize);
+      const segment = body.slice(m.index, ctxEnd);
+      const contentMatch = textContentRe.exec(segment);
+      if (!contentMatch) continue;
+      const partsStart = m.index + contentMatch.index + contentMatch[0].length;
+      const parts = extractPartsStrings(body, partsStart);
+      const text = parts.join("\n\n").trim();
+      if (text) {
+        const timeMatch = segment.match(/"create_time"\s*:\s*(\d+(?:\.\d+)?)/);
+        const time = timeMatch ? parseFloat(timeMatch[1]) : 0;
+        entries.push({ text, time });
+      }
+    }
+  };
+
+  processRole("user", userEntries, 4000);
+  // Large window for assistant: thinking blocks can be 10K+ chars before the real response
+  processRole("assistant", assistantEntries, 40000);
+  userEntries.sort((a, b) => a.time - b.time);
+  assistantEntries.sort((a, b) => a.time - b.time);
+
+  return {
+    user: userEntries.length ? userEntries[userEntries.length - 1].text : null,
+    assistant: assistantEntries.length ? assistantEntries[assistantEntries.length - 1].text : null,
+  };
+}
+
 /** Single chat metadata: k=["id","userId","title",...], v=[uuid, userId, title, ...]. */
 function isServerFnChatMetaBody(text: string): boolean {
   return /"k":\["id","userId","title"/.test(text) && !isServerFnChatListBody(text);
@@ -454,6 +559,35 @@ function lastMessageFromArray(messages: unknown[], role: string): string | null 
   return null;
 }
 
+function allMessagesFromMapping(data: Record<string, unknown>): ConversationMessage[] {
+  const mapping = data.mapping;
+  const currentNode = data.current_node;
+  if (!mapping || typeof mapping !== "object" || typeof currentNode !== "string") {
+    return [];
+  }
+
+  const map = mapping as Record<string, Record<string, unknown>>;
+  const messages: ConversationMessage[] = [];
+  let nodeId: string | null = currentNode;
+
+  while (nodeId) {
+    const node: Record<string, unknown> | undefined = map[nodeId];
+    if (!node) break;
+    const message = node.message;
+    if (message && typeof message === "object") {
+      const record = message as Record<string, unknown>;
+      const role = messageRole(record);
+      const text = extractTextFromMessage(message);
+      if (text && (role === "user" || role === "assistant")) {
+        messages.push({ role: role as "user" | "assistant", text });
+      }
+    }
+    nodeId = typeof node.parent === "string" ? node.parent : null;
+  }
+
+  return messages.reverse();
+}
+
 function pairFromCurrentNode(data: Record<string, unknown>): {
   user: string | null;
   assistant: string | null;
@@ -675,8 +809,13 @@ export function parseConversationBodies(item: InterceptedFetch): {
         if (seroval) {
           if (!user && seroval.user) user = seroval.user;
           if (!assistant && seroval.assistant) assistant = seroval.assistant;
-        } else if (!assistant && !isNoiseBody(body)) {
-          rawResp = body.length <= 4000 ? body : body.slice(0, 4000) + "…";
+        } else {
+          const extracted = extractFromTruncatedMappingBody(body);
+          if (!user && extracted.user) user = extracted.user;
+          if (!assistant && extracted.assistant) assistant = extracted.assistant;
+          if (!user && !assistant && !isNoiseBody(body)) {
+            rawResp = body.length <= 4000 ? body : body.slice(0, 4000) + "…";
+          }
         }
       }
     }
@@ -837,6 +976,19 @@ export function messagesFromIntercept(item: InterceptedFetch): ConversationMessa
     const out: ConversationMessage[] = users.map((u) => ({ role: "user", text: u }));
     if (assistant) out.push({ role: "assistant", text: assistant });
     return out;
+  }
+
+  // For GET /conversation responses with full mapping, extract all turns.
+  if (item.resp_body) {
+    try {
+      const parsed = JSON.parse(item.resp_body) as Record<string, unknown>;
+      if (parsed && typeof parsed.mapping === "object" && typeof parsed.current_node === "string") {
+        const all = allMessagesFromMapping(parsed);
+        if (all.length > 0) return all;
+      }
+    } catch {
+      // fall through to parseConversationBodies
+    }
   }
 
   const { user, assistant } = parseConversationBodies(item);

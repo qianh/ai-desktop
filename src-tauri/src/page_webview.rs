@@ -87,7 +87,8 @@ pub fn mount_page_webview(
 
     let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(target.clone()))
         .user_agent(PAGE_WEBVIEW_USER_AGENT)
-        .background_color(Color(255, 255, 255, 255));
+        .background_color(Color(255, 255, 255, 255))
+        .data_store_identifier(page_id_to_data_store_uuid(&page_id));
     if proxy_port > 0 {
         let proxy = url::Url::parse(&format!("http://127.0.0.1:{proxy_port}"))
             .map_err(|e| format!("invalid proxy url: {e}"))?;
@@ -223,6 +224,8 @@ fn make_intercept_script(page_id: &str, _proxy_port: u16) -> String {
     // Same-origin HTTPS path — avoids mixed-content block on HTTPS chat pages.
     var DRAIN_URL = '/__appscope_intercept__';
     var MAX_BODY_SIZE = 50000;
+    // Non-streaming JSON responses (e.g. GET /conversation) can be much larger
+    var MAX_BODY_SIZE_JSON = 500000;
     var originalFetch = window.fetch;
     var pending = [];
     var drainCount = 0;
@@ -236,6 +239,25 @@ fn make_intercept_script(page_id: &str, _proxy_port: u16) -> String {
         if (typeof text !== 'string') return text;
         return text.length > limit ? text.slice(0, limit) + '...[truncated]' : text;
     }}
+    function looksBinary(text) {{
+        if (typeof text !== 'string') return false;
+        if (text.charCodeAt(0) === 0x1f && text.charCodeAt(1) === 0x8b) return true;
+        if (text.length < 8) return false;
+        var sample = text.slice(0, 512);
+        var nonPrintable = 0;
+        for (var i = 0; i < sample.length; i++) {{
+            var code = sample.charCodeAt(i);
+            if (code < 32 && code !== 9 && code !== 10 && code !== 13) nonPrintable++;
+        }}
+        return nonPrintable > sample.length * 0.1;
+    }}
+    function sanitizeBodyText(text) {{
+        if (text == null) return null;
+        var nullChar = String.fromCharCode(0);
+        var stripped = text.indexOf(nullChar) !== -1 ? text.split(nullChar).join('') : text;
+        if (looksBinary(stripped)) return '[binary body omitted]';
+        return stripped;
+    }}
     function headersToObject(headers) {{
         var obj = {{}};
         if (headers && typeof headers.forEach === 'function') {{
@@ -245,8 +267,8 @@ fn make_intercept_script(page_id: &str, _proxy_port: u16) -> String {
     }}
     function safeBodyText(body) {{
         if (body == null) return null;
-        if (typeof body === 'string') return truncate(body, MAX_BODY_SIZE);
-        try {{ return truncate(JSON.stringify(body), MAX_BODY_SIZE); }}
+        if (typeof body === 'string') return sanitizeBodyText(truncate(body, MAX_BODY_SIZE));
+        try {{ return sanitizeBodyText(truncate(JSON.stringify(body), MAX_BODY_SIZE)); }}
         catch(e) {{ return '[unserializable]'; }}
     }}
 
@@ -327,9 +349,10 @@ fn make_intercept_script(page_id: &str, _proxy_port: u16) -> String {
                             break;
                         }}
                     }}
-                    respBody = chunks;
+                    respBody = sanitizeBodyText(chunks);
                 }} else {{
-                    respBody = truncate(await clone.text(), MAX_BODY_SIZE);
+                    var bodyLimit = (contentType.includes('application/json') || contentType === '') ? MAX_BODY_SIZE_JSON : MAX_BODY_SIZE;
+                    respBody = sanitizeBodyText(truncate(await clone.text(), bodyLimit));
                 }}
             }} catch(e) {{
                 respBody = '[read error: ' + e.message + ']';
@@ -363,6 +386,27 @@ fn make_intercept_script(page_id: &str, _proxy_port: u16) -> String {
 #[cfg(test)]
 mod tests {
     use super::sanitize_webview_label;
+    use super::page_id_to_data_store_uuid;
+
+    #[test]
+    fn data_store_uuid_returns_uuid_bytes_for_valid_uuid() {
+        let uuid_str = "e46554d6-7807-4e43-8f12-2f14ac39238f";
+        let bytes = page_id_to_data_store_uuid(uuid_str);
+        let expected = uuid::Uuid::parse_str(uuid_str).unwrap();
+        assert_eq!(bytes, *expected.as_bytes());
+    }
+
+    #[test]
+    fn data_store_uuid_does_not_panic_for_non_uuid() {
+        let bytes = page_id_to_data_store_uuid("not-a-uuid");
+        assert_eq!(bytes.len(), 16);
+    }
+
+    #[test]
+    fn data_store_uuid_does_not_panic_for_empty_string() {
+        let bytes = page_id_to_data_store_uuid("");
+        assert_eq!(bytes, [0u8; 16]);
+    }
 
     #[test]
     fn label_allows_uuid_page_ids() {
@@ -379,6 +423,7 @@ mod tests {
         assert!(script.contains("window.fetch"));
         assert!(script.contains("originalFetch"));
         assert!(script.contains("/__appscope_intercept__"));
+        assert!(script.contains("[binary body omitted]"));
         assert!(script.contains("test-page-id"));
     }
 
@@ -397,6 +442,17 @@ mod tests {
         assert!(script.contains("__APPSCOPE_INTERCEPT_INIT__"));
         assert!(script.contains("page-1"));
     }
+}
+
+pub(crate) fn page_id_to_data_store_uuid(page_id: &str) -> [u8; 16] {
+    if let Ok(uuid) = page_id.parse::<uuid::Uuid>() {
+        return *uuid.as_bytes();
+    }
+    let mut bytes = [0u8; 16];
+    let src = page_id.as_bytes();
+    let len = src.len().min(16);
+    bytes[..len].copy_from_slice(&src[..len]);
+    bytes
 }
 
 pub(crate) fn intercept_script_if_enabled(

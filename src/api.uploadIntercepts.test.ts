@@ -186,6 +186,29 @@ describe("uploadInterceptsToSupabase", () => {
     expect(row.preview_text).toBe("SSD健康状态分析");
   });
 
+  it("strips binary and null-byte bodies before POST", async () => {
+    const gzipLike = String.fromCharCode(0x1f, 0x8b, 0x08) + "payload";
+    let postedBody = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        postedBody = String(init?.body);
+        return { ok: true, status: 201, text: async () => "" };
+      }),
+    );
+
+    await uploadInterceptsToSupabase(
+      "page-1",
+      [{ ...sample, req_body: gzipLike, resp_body: "ok\u0000" }],
+      config,
+    );
+
+    const row = JSON.parse(postedBody)[0] as InterceptedFetch;
+    expect(row.req_body).toBe("[binary body omitted]");
+    expect(row.resp_body).toBe("ok");
+    expect(row.req_body).not.toContain("\0");
+  });
+
   it("throws when Supabase returns an error", async () => {
     vi.stubGlobal(
       "fetch",
