@@ -23,3 +23,6 @@ yarn-error.log*
 # rust / tauri
 src-tauri/target
 src-tauri/gen/schemas
+
+# PAI working memory
+MEMORY/
