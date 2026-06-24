@@ -48,7 +48,7 @@ export function sanitizeInterceptForUpload(item: InterceptedFetch): InterceptedF
     resp_body: sanitizePostgresText(item.resp_body),
     req_headers: sanitizeHeadersForUpload(item.req_headers ?? {}),
     resp_headers: sanitizeHeadersForUpload(item.resp_headers ?? {}),
-    error: sanitizePostgresText(item.error),
+    error: sanitizePostgresText(item.error) ?? undefined,
     preview_text: sanitizePostgresText(item.preview_text),
     conversation_id: sanitizePostgresText(item.conversation_id),
   };
