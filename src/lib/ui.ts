@@ -1,7 +1,7 @@
 // Shared style atoms, ported from the inline styles in AppScope.dc.html.
 import type { CSSProperties } from "react";
 
-export const ACCENT = "#007aff";
+export const ACCENT = "var(--c-accent)";
 
 export const FONT = "-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif";
 export const MONO = "ui-monospace,'SF Mono',Menlo,monospace";
@@ -23,9 +23,9 @@ export const secondaryBtn: CSSProperties = {
   cursor: "pointer",
   font: "13px -apple-system,system-ui",
   fontWeight: 500,
-  color: "#1d1d1f",
-  background: "#fff",
-  border: "1px solid #d8d8dc",
+  color: "var(--c-text)",
+  background: "var(--c-bg)",
+  border: "1px solid var(--c-border-2)",
   borderRadius: 8,
   padding: "8px 15px",
 };
@@ -36,7 +36,7 @@ export const dangerBtn: CSSProperties = {
   font: "13px -apple-system,system-ui",
   fontWeight: 500,
   color: "#c0392b",
-  background: "#fff",
+  background: "var(--c-bg)",
   border: "1px solid #ecc",
   borderRadius: 8,
   padding: "8px 15px",
@@ -59,6 +59,8 @@ export function iconStyle(color: string): CSSProperties {
   };
 }
 
+export type ThemeMode = "light" | "dark" | "system";
+
 /** macOS-style segmented control button */
 export function segStyle(on: boolean): CSSProperties {
   return {
@@ -69,8 +71,8 @@ export function segStyle(on: boolean): CSSProperties {
     fontWeight: on ? 600 : 500,
     padding: "4px 11px",
     borderRadius: 5,
-    color: on ? "#1d1d1f" : "#7a7a80",
-    background: on ? "#fff" : "transparent",
+    color: on ? "var(--c-text)" : "var(--c-text-3)",
+    background: on ? "var(--c-bg)" : "transparent",
     boxShadow: on ? "0 1px 2px rgba(0,0,0,.12)" : undefined,
   };
 }

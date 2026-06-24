@@ -19,7 +19,7 @@ function statusColor(status: number): string {
   if (status >= 200 && status < 300) return "#30a14e";
   if (status >= 300 && status < 400) return "#c97b20";
   if (status >= 400) return "#d23b30";
-  return "#8a8a8e";
+  return "var(--c-text-3)";
 }
 
 export default function InterceptPanel({ intercepts }: Props) {
@@ -31,7 +31,7 @@ export default function InterceptPanel({ intercepts }: Props) {
         style={{
           padding: 24,
           textAlign: "center",
-          color: "#9a9aa0",
+          color: "var(--c-text-4)",
           fontSize: 12,
         }}
       >
@@ -48,7 +48,7 @@ export default function InterceptPanel({ intercepts }: Props) {
           <div
             key={item.id}
             style={{
-              borderBottom: "1px solid #ededf0",
+              borderBottom: "1px solid var(--c-border)",
               cursor: "pointer",
             }}
           >
@@ -59,13 +59,13 @@ export default function InterceptPanel({ intercepts }: Props) {
                 alignItems: "center",
                 gap: 8,
                 padding: "6px 10px",
-                background: expanded ? "#f6f6f8" : "transparent",
+                background: expanded ? "var(--c-bg-2)" : "transparent",
               }}
             >
               <span
                 style={{
                   fontWeight: 600,
-                  color: "#5a5a5e",
+                  color: "var(--c-text-2)",
                   minWidth: 40,
                   fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
                   fontSize: 11,
@@ -90,40 +90,40 @@ export default function InterceptPanel({ intercepts }: Props) {
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                   whiteSpace: "nowrap",
-                  color: "#1d1d1f",
+                  color: "var(--c-text)",
                   fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
                   fontSize: 11,
                 }}
               >
                 {item.url}
               </span>
-              <span style={{ color: "#8a8a8e", fontSize: 10, whiteSpace: "nowrap" }}>
+              <span style={{ color: "var(--c-text-3)", fontSize: 10, whiteSpace: "nowrap" }}>
                 {formatTime(item.duration_ms)}
               </span>
-              <span style={{ color: "#b0b0b4", fontSize: 10 }}>
+              <span style={{ color: "var(--c-text-4)", fontSize: 10 }}>
                 {expanded ? "▼" : "▶"}
               </span>
             </div>
             {expanded && (
-              <div style={{ padding: "8px 10px 12px 58px", background: "#fafafc" }}>
+              <div style={{ padding: "8px 10px 12px 58px", background: "var(--c-bg-2)" }}>
                 {item.req_body && (
                   <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontWeight: 600, color: "#5a5a5e", marginBottom: 4 }}>
+                    <div style={{ fontWeight: 600, color: "var(--c-text-2)", marginBottom: 4 }}>
                       Request Body
                     </div>
                     <pre
                       style={{
                         margin: 0,
                         padding: 8,
-                        background: "#fff",
-                        border: "1px solid #ededf0",
+                        background: "var(--c-bg-2)",
+                        border: "1px solid var(--c-border)",
                         borderRadius: 4,
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-all",
                         fontSize: 11,
                         maxHeight: 200,
                         overflow: "auto",
-                        color: "#1d1d1f",
+                        color: "var(--c-text)",
                         fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
                       }}
                     >
@@ -133,22 +133,22 @@ export default function InterceptPanel({ intercepts }: Props) {
                 )}
                 {item.resp_body && (
                   <div>
-                    <div style={{ fontWeight: 600, color: "#5a5a5e", marginBottom: 4 }}>
+                    <div style={{ fontWeight: 600, color: "var(--c-text-2)", marginBottom: 4 }}>
                       Response Body
                     </div>
                     <pre
                       style={{
                         margin: 0,
                         padding: 8,
-                        background: "#fff",
-                        border: "1px solid #ededf0",
+                        background: "var(--c-bg-2)",
+                        border: "1px solid var(--c-border)",
                         borderRadius: 4,
                         whiteSpace: "pre-wrap",
                         wordBreak: "break-all",
                         fontSize: 11,
                         maxHeight: 300,
                         overflow: "auto",
-                        color: "#1d1d1f",
+                        color: "var(--c-text)",
                         fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
                       }}
                     >

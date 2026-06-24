@@ -18,7 +18,7 @@ function formatConnectionLabel(hasPageSession: boolean, proxyPort?: number | nul
 function certColor(state: string): string {
   if (state === "Trusted") return "#30a14e";
   if (state === "Installed" || state === "Generated") return "#c97b20";
-  return "#8a8a8e";
+  return "var(--c-text-3)";
 }
 
 export default function StatusBar({
@@ -38,10 +38,10 @@ export default function StatusBar({
         alignItems: "center",
         gap: 14,
         padding: "0 14px",
-        background: "#f1f1f3",
-        borderTop: "1px solid #e0e0e4",
+        background: "var(--c-divider)",
+        borderTop: "1px solid var(--c-border-2)",
         font: "11px ui-monospace,'SF Mono',Menlo,monospace",
-        color: "#8a8a8e",
+        color: "var(--c-text-3)",
       }}
     >
       <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -50,7 +50,7 @@ export default function StatusBar({
             width: 7,
             height: 7,
             borderRadius: "50%",
-            background: live ? "#30a14e" : "#c4c4c8",
+            background: live ? "#30a14e" : "var(--c-border-3)",
             animation: live ? "ascPulse 1.6s infinite" : undefined,
           }}
         />
@@ -58,9 +58,9 @@ export default function StatusBar({
       </span>
       <div style={{ flex: 1 }} />
       <span>{formatConnectionLabel(hasPageSession, proxyPort)}</span>
-      <span style={{ color: "#d0d0d4" }}>·</span>
+      <span style={{ color: "var(--c-border-2)" }}>·</span>
       <span style={{ color: certColor(certState) }}>CA {certState}</span>
-      <span style={{ color: "#d0d0d4" }}>·</span>
+      <span style={{ color: "var(--c-border-2)" }}>·</span>
       <span>{quicDisabled ? "QUIC off" : "QUIC on"}</span>
     </div>
   );

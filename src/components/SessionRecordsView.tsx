@@ -22,7 +22,7 @@ type Props = {
 const fieldLabel: CSSProperties = {
   fontSize: 10.5,
   fontWeight: 600,
-  color: "#9a9aa0",
+  color: "var(--c-text-4)",
   letterSpacing: ".04em",
   textTransform: "uppercase",
   marginBottom: 6,
@@ -37,8 +37,8 @@ const fieldInput: CSSProperties = {
   borderRadius: 8,
   padding: "0 10px",
   font: `12.5px ${FONT}`,
-  color: "#1d1d1f",
-  background: "#fff",
+  color: "var(--c-text)",
+  background: "var(--c-bg)",
   outline: "none",
 };
 
@@ -48,7 +48,7 @@ const timeRangeShell: CSSProperties = {
   height: 32,
   border: "1px solid #d8d8dc",
   borderRadius: 8,
-  background: "#fff",
+  background: "var(--c-bg)",
   overflow: "hidden",
 };
 
@@ -58,7 +58,7 @@ const timeRangeInput: CSSProperties = {
   border: "none",
   padding: "0 8px",
   font: `12px ${FONT}`,
-  color: "#1d1d1f",
+  color: "var(--c-text)",
   background: "transparent",
   outline: "none",
 };
@@ -68,7 +68,7 @@ const ghostBtn: CSSProperties = {
   fontSize: 12,
   padding: "6px 12px",
   borderRadius: 7,
-  color: "#5a5a5e",
+  color: "var(--c-text-2)",
   height: 32,
 };
 
@@ -143,15 +143,15 @@ function SessionRecordsList({
         style={{
           padding: "14px 18px 16px",
           borderBottom: "1px solid #e8e8ec",
-          background: "linear-gradient(180deg, #fbfbfc 0%, #f6f6f8 100%)",
+          background: "var(--c-header-bg)",
           flex: "none",
         }}
       >
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: "#1d1d1f", letterSpacing: "-.01em" }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "var(--c-text)", letterSpacing: "-.01em" }}>
             会话记录
           </div>
-          <div style={{ fontSize: 12, color: "#9a9aa0", marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 12, color: "var(--c-text-4)", marginTop: 4, display: "flex", alignItems: "center", gap: 8 }}>
             {loading && (
               <span
                 style={{
@@ -183,7 +183,7 @@ function SessionRecordsList({
             padding: "12px 14px",
             borderRadius: 10,
             border: "1px solid #e4e4e8",
-            background: "#ffffff",
+            background: "var(--c-bg)",
             boxShadow: "0 1px 2px rgba(0,0,0,.04)",
           }}
         >
@@ -223,11 +223,11 @@ function SessionRecordsList({
                 style={timeRangeInput}
                 title="起始时间"
               />
-              <span style={{ flex: "none", width: 1, alignSelf: "stretch", background: "#e8e8ec" }} />
-              <span style={{ flex: "none", padding: "0 6px", fontSize: 11, color: "#b0b0b6", userSelect: "none" }}>
+              <span style={{ flex: "none", width: 1, alignSelf: "stretch", background: "var(--c-border)" }} />
+              <span style={{ flex: "none", padding: "0 6px", fontSize: 11, color: "var(--c-text-4)", userSelect: "none" }}>
                 至
               </span>
-              <span style={{ flex: "none", width: 1, alignSelf: "stretch", background: "#e8e8ec" }} />
+              <span style={{ flex: "none", width: 1, alignSelf: "stretch", background: "var(--c-border)" }} />
               <input
                 type="datetime-local"
                 value={draftTimeTo}
@@ -285,7 +285,7 @@ function SessionRecordsList({
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: "auto", minHeight: 0, background: "#fff" }}>
+      <div style={{ flex: 1, overflow: "auto", minHeight: 0, background: "var(--c-bg)" }}>
         {loading && items.length === 0 && (
           <div style={{ padding: "32px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
             {[0, 1, 2].map((i) => (
@@ -294,7 +294,7 @@ function SessionRecordsList({
                 style={{
                   height: 68,
                   borderRadius: 8,
-                  background: "linear-gradient(90deg, #f3f3f5 0%, #ececef 50%, #f3f3f5 100%)",
+                  background: "linear-gradient(90deg, var(--c-bg-3) 0%, var(--c-bg-4) 50%, var(--c-bg-3) 100%)",
                   backgroundSize: "200% 100%",
                   animation: "ascShimmer 1.2s ease-in-out infinite",
                   animationDelay: `${i * 0.15}s`,
@@ -304,14 +304,14 @@ function SessionRecordsList({
           </div>
         )}
         {!loading && queryToken >= 1 && items.length === 0 && !error && (
-          <div style={{ padding: 56, textAlign: "center", color: "#9a9aa0", fontSize: 13 }}>
+          <div style={{ padding: 56, textAlign: "center", color: "var(--c-text-4)", fontSize: 13 }}>
             <div
               style={{
                 width: 44,
                 height: 44,
                 margin: "0 auto 14px",
                 borderRadius: 12,
-                background: "#f3f3f5",
+                background: "var(--c-bg-3)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -320,7 +320,7 @@ function SessionRecordsList({
             >
               💬
             </div>
-            <div style={{ fontWeight: 500, color: "#5a5a5e" }}>暂无符合条件的对话记录</div>
+            <div style={{ fontWeight: 500, color: "var(--c-text-2)" }}>暂无符合条件的对话记录</div>
             <div style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>
               会话记录显示对话类请求（ChatGPT /backend-api/conversation、内置 Chat /api/chat 等），不含统计、配置类请求。
               <br />
@@ -350,7 +350,7 @@ function SessionRecordsList({
                 transition: "background .12s ease",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#f7f8fa";
+                e.currentTarget.style.background = "var(--c-hover)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = "transparent";
@@ -359,7 +359,7 @@ function SessionRecordsList({
               <div
                 style={{
                   fontSize: 13.5,
-                  color: "#1d1d1f",
+                  color: "var(--c-text)",
                   lineHeight: 1.5,
                   overflow: "hidden",
                   display: "-webkit-box",
@@ -372,7 +372,7 @@ function SessionRecordsList({
               <div
                 style={{
                   fontSize: 11,
-                  color: "#9a9aa0",
+                  color: "var(--c-text-4)",
                   marginTop: 7,
                   display: "flex",
                   flexWrap: "wrap",
@@ -380,12 +380,12 @@ function SessionRecordsList({
                   gap: "4px 0",
                 }}
               >
-                <span style={{ fontFamily: "ui-monospace,Menlo,monospace", color: "#7a7a80" }}>
+                <span style={{ fontFamily: "ui-monospace,Menlo,monospace", color: "var(--c-text-3)" }}>
                   {formatTimestamp(item.timestamp)}
                 </span>
                 {page && (
                   <>
-                    <span style={{ margin: "0 6px", color: "#d4d4da" }}>·</span>
+                    <span style={{ margin: "0 6px", color: "var(--c-switch-off)" }}>·</span>
                     <span
                       style={{
                         fontSize: 10.5,
@@ -400,9 +400,9 @@ function SessionRecordsList({
                     </span>
                   </>
                 )}
-                <span style={{ margin: "0 6px", color: "#d4d4da" }}>·</span>
-                <span style={{ fontWeight: 600, color: "#5a5a5e" }}>{item.method}</span>
-                <span style={{ margin: "0 6px", color: "#d4d4da" }}>·</span>
+                <span style={{ margin: "0 6px", color: "var(--c-switch-off)" }}>·</span>
+                <span style={{ fontWeight: 600, color: "var(--c-text-2)" }}>{item.method}</span>
+                <span style={{ margin: "0 6px", color: "var(--c-switch-off)" }}>·</span>
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>
                   {urlShort}
                 </span>
@@ -418,7 +418,7 @@ function SessionRecordsList({
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(20,20,24,.34)",
+            background: "var(--c-overlay)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -473,11 +473,11 @@ export default function SessionRecordsView({ pages }: Props) {
           justifyContent: "center",
           flexDirection: "column",
           gap: 8,
-          color: "#9a9aa0",
+          color: "var(--c-text-4)",
           fontSize: 13,
         }}
       >
-        <div style={{ fontSize: 15, fontWeight: 600, color: "#1d1d1f" }}>未配置 Supabase</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: "var(--c-text)" }}>未配置 Supabase</div>
         <div>请在 Settings → Cloud Sync 中填写 URL 和 API Key</div>
       </div>
     );
@@ -491,7 +491,7 @@ export default function SessionRecordsView({ pages }: Props) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#9a9aa0",
+          color: "var(--c-text-4)",
           fontSize: 13,
         }}
       >

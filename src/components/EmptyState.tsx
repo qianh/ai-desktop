@@ -30,13 +30,13 @@ export default function EmptyState({ onOpenCapture, busy = false }: Props) {
           alignItems: "center",
           justifyContent: "center",
           fontSize: 26,
-          color: "#c4c4ca",
+          color: "var(--c-border-3)",
         }}
       >
         ↯
       </div>
-      <div style={{ fontSize: 15, fontWeight: 600, color: "#1d1d1f" }}>还没有捕获到请求</div>
-      <div style={{ fontSize: 12.5, color: "#9a9aa0", maxWidth: 320, lineHeight: 1.5 }}>
+      <div style={{ fontSize: 15, fontWeight: 600, color: "var(--c-text)" }}>还没有捕获到请求</div>
+      <div style={{ fontSize: 12.5, color: "var(--c-text-4)", maxWidth: 320, lineHeight: 1.5 }}>
         点击 Open &amp; Capture，AppScope 将在应用内打开页面并启动本地代理开始抓包。
       </div>
       {onOpenCapture && (

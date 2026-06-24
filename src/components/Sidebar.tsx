@@ -29,7 +29,7 @@ const navBase: CSSProperties = {
   borderRadius: 7,
   padding: "6px 9px",
   font: "13px -apple-system,system-ui",
-  color: "#1d1d1f",
+  color: "var(--c-text)",
   textAlign: "left",
 };
 
@@ -42,7 +42,7 @@ const sectionHeader: CSSProperties = {
 const sectionLabel: CSSProperties = {
   fontSize: 10.5,
   fontWeight: 700,
-  color: "#9a9aa0",
+  color: "var(--c-text-4)",
   letterSpacing: ".06em",
   textTransform: "uppercase",
 };
@@ -51,7 +51,7 @@ const addBtn: CSSProperties = {
   border: "none",
   background: "none",
   cursor: "pointer",
-  color: "#8a8a8e",
+  color: "var(--c-text-3)",
   fontSize: 15,
   lineHeight: 1,
   padding: "0 2px",
@@ -73,7 +73,7 @@ const deleteBtn: CSSProperties = {
   border: "none",
   background: "none",
   cursor: "pointer",
-  color: "#9a9aa0",
+  color: "var(--c-text-4)",
   fontSize: 15,
   lineHeight: 1,
   padding: "6px 8px",
@@ -86,7 +86,7 @@ const collapseToggle: CSSProperties = {
   border: "none",
   background: "none",
   cursor: "pointer",
-  color: "#9a9aa0",
+  color: "var(--c-text-4)",
   fontSize: 13,
   lineHeight: 1,
   padding: "4px 6px",
@@ -98,7 +98,7 @@ const collapseToggle: CSSProperties = {
 function collapsedIconBtn(sel: boolean): CSSProperties {
   return {
     ...collapseToggle,
-    background: sel ? ACCENT + "22" : "none",
+    background: sel ? "var(--c-accent-soft)" : "none",
     width: 28,
     height: 28,
     borderRadius: 7,
@@ -128,8 +128,8 @@ function ReportingToggle({ pageId, enabled, compact, onToggle }: ReportingToggle
     alignItems: "center",
     justifyContent: "center",
     lineHeight: 1,
-    color: enabled ? ACCENT : "#8e8e93",
-    background: enabled ? (compact ? "rgba(0, 122, 255, 0.12)" : "rgba(0, 122, 255, 0.1)") : "transparent",
+    color: enabled ? ACCENT : "var(--c-text-3)",
+    background: enabled ? "var(--c-accent-soft)" : "transparent",
     ...(compact
       ? { width: 18, height: 14, borderRadius: 4, fontSize: 9, padding: 0 }
       : {
@@ -191,7 +191,7 @@ function partitionPages(pages: Page[]) {
 export default function Sidebar(p: Props) {
   const sessionsMode = p.navMode === "sessions";
   const { chatPage, otherPages } = partitionPages(p.pages);
-  const navSel = (on: boolean): CSSProperties => (on ? { ...navBase, background: ACCENT + "1f" } : navBase);
+  const navSel = (on: boolean): CSSProperties => (on ? { ...navBase, background: "var(--c-accent-soft)" } : navBase);
   const rowSelected = (id: string) => sessionsMode && p.activeId === id;
   const listRowClass = (selected: boolean) =>
     selected ? "asc-sidebar-row asc-sidebar-row--selected" : "asc-sidebar-row";
@@ -202,8 +202,8 @@ export default function Sidebar(p: Props) {
         style={{
           width: 40,
           flex: "none",
-          background: "#f3f3f5",
-          borderRight: "1px solid #e0e0e4",
+          background: "var(--c-bg-3)",
+          borderRight: "1px solid var(--c-border-2)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
@@ -274,16 +274,16 @@ export default function Sidebar(p: Props) {
   }
 
   return (
-    <div style={{ width: 246, flex: "none", background: "#f3f3f5", borderRight: "1px solid #e0e0e4", display: "flex", flexDirection: "column", minHeight: 0 }}>
+    <div style={{ width: 246, flex: "none", background: "var(--c-bg-3)", borderRight: "1px solid var(--c-border-2)", display: "flex", flexDirection: "column", minHeight: 0 }}>
       {/* search + collapse */}
       <div style={{ padding: "10px 11px 6px", display: "flex", alignItems: "center", gap: 6 }}>
-        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, background: "#e7e7ea", borderRadius: 7, padding: "5px 9px" }}>
-          <span style={{ color: "#9a9aa0", fontSize: 12 }}>⌕</span>
+        <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, background: "var(--c-bg-4)", borderRadius: 7, padding: "5px 9px" }}>
+          <span style={{ color: "var(--c-text-4)", fontSize: 12 }}>⌕</span>
           <input
             value={p.query}
             onChange={(e) => p.onQuery(e.target.value)}
             placeholder="搜索请求 / Host / Path"
-            style={{ flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", font: "12px -apple-system,system-ui", color: "#1d1d1f" }}
+            style={{ flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", font: "12px -apple-system,system-ui", color: "var(--c-text)" }}
           />
         </div>
         <button
@@ -315,7 +315,7 @@ export default function Sidebar(p: Props) {
                     display: "block",
                     fontSize: 12.5,
                     fontWeight: 600,
-                    color: "#1d1d1f",
+                    color: "var(--c-text)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -327,7 +327,7 @@ export default function Sidebar(p: Props) {
                   style={{
                     display: "block",
                     fontSize: 11,
-                    color: "#9a9aa0",
+                    color: "var(--c-text-4)",
                     whiteSpace: "nowrap",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -377,10 +377,10 @@ export default function Sidebar(p: Props) {
                   )}
                 </span>
                 <span style={{ flex: 1, textAlign: "left", minWidth: 0, overflow: "hidden" }}>
-                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 500, color: "#1d1d1f", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 500, color: "var(--c-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {pg.name}
                   </span>
-                  <span style={{ display: "block", fontSize: 11, color: "#9a9aa0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pg.host}</span>
+                  <span style={{ display: "block", fontSize: 11, color: "var(--c-text-4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pg.host}</span>
                 </span>
               </button>
               <ReportingToggle
@@ -408,7 +408,7 @@ export default function Sidebar(p: Props) {
       </div>
 
       {/* footer nav */}
-      <div style={{ borderTop: "1px solid #e0e0e4", padding: 8, display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ borderTop: "1px solid var(--c-border-2)", padding: 8, display: "flex", flexDirection: "column", gap: 2 }}>
         <button onClick={p.onCerts} style={navSel(p.navMode === "certs")}>
           <span style={{ width: 18, textAlign: "center", fontSize: 13 }}>🛡</span>
           <span style={{ flex: 1, textAlign: "left" }}>Certificates</span>

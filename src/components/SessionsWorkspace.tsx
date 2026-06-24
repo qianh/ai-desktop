@@ -129,8 +129,8 @@ export default function SessionsWorkspace(p: Props) {
                       padding: "6px 10px",
                       fontWeight: 600,
                       fontSize: 11,
-                      color: "#5a5a5e",
-                      background: "#fbfbfc",
+                      color: "var(--c-text-2)",
+                      background: "var(--c-bg-2)",
                       borderBottom: "1px solid #ededf0",
                     }}
                   >
@@ -151,7 +151,7 @@ export default function SessionsWorkspace(p: Props) {
           display: p.navMode === "records" ? "flex" : "none",
           flexDirection: "column",
           zIndex: LAYER.records,
-          background: "#ffffff",
+          background: "var(--c-bg)",
         }}
       >
         <SessionRecordsView pages={p.pages} />
@@ -166,9 +166,9 @@ export default function SessionsWorkspace(p: Props) {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "#9a9aa0",
+            color: "var(--c-text-4)",
             fontSize: 13,
-            background: "#ffffff",
+            background: "var(--c-bg)",
           }}
         >
           请在弹窗中确认删除…
@@ -202,12 +202,12 @@ export default function SessionsWorkspace(p: Props) {
             alignItems: "center",
             justifyContent: "center",
             gap: 12,
-            color: "#9a9aa0",
+            color: "var(--c-text-4)",
             fontSize: 13,
             zIndex: LAYER.transient,
           }}
         >
-          <div style={{ fontSize: 15, fontWeight: 600, color: "#1d1d1f" }}>还没有页面</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "var(--c-text)" }}>还没有页面</div>
           <div>点击左侧 Pages 旁的 + 添加一个 URL</div>
         </div>
       )}

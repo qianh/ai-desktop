@@ -29,6 +29,7 @@ import CertManager from "./components/CertManager";
 import SessionsWorkspace from "./components/SessionsWorkspace";
 
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
+import { type ThemeMode } from "./lib/ui";
 import {
   DEFAULT_PAGE_DISPLAY_NAME,
   ensureChatInterceptReporting,
@@ -69,6 +70,9 @@ export default function App() {
   const [clear, setClear] = useState<Record<string, boolean>>({});
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [toggles, setToggles] = useState<Toggles>({ mask: true, quic: true, login: false, autoclean: true });
+  const [theme, setTheme] = useState<ThemeMode>(
+    () => (localStorage.getItem("theme") as ThemeMode) ?? "system"
+  );
   const [certState, setCertState] = useState("NotGenerated");
   const [captureBusy, setCaptureBusy] = useState(false);
   const captureInFlight = useRef<Set<string>>(new Set());
@@ -77,6 +81,24 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [interceptsByPage, setInterceptsByPage] = useState<Record<string, InterceptedFetch[]>>({});
 
+  const changeTheme = (t: ThemeMode) => {
+    setTheme(t);
+    localStorage.setItem("theme", t);
+  };
+
+  useEffect(() => {
+    const apply = (dark: boolean) => {
+      if (dark) document.documentElement.setAttribute("data-theme", "dark");
+      else document.documentElement.removeAttribute("data-theme");
+    };
+    if (theme === "dark") { apply(true); return; }
+    if (theme === "light") { apply(false); return; }
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    apply(mq.matches);
+    const handler = (e: MediaQueryListEvent) => apply(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [theme]);
 
   const refreshPages = useCallback(async () => {
     const apiPages = await listPages();
@@ -524,7 +546,7 @@ export default function App() {
         width: "100%",
         boxSizing: "border-box",
         display: "flex",
-        background: "#ffffff",
+        background: "var(--c-bg)",
         fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif",
       }}
     >
@@ -532,7 +554,7 @@ export default function App() {
         style={{
           flex: 1,
           minWidth: 0,
-          background: "#ffffff",
+          background: "var(--c-bg)",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -565,7 +587,7 @@ export default function App() {
             onSettings={() => setNavMode("settings")}
           />
 
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "#ffffff" }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--c-bg)" }}>
             {navMode === "certs" && (
               <CertManager
                 state={certState}
@@ -605,7 +627,7 @@ export default function App() {
                 onRefresh={refreshCert}
               />
             )}
-            {navMode === "settings" && <Settings toggles={toggles} onToggle={toggle} />}
+            {navMode === "settings" && <Settings toggles={toggles} onToggle={toggle} theme={theme} onTheme={changeTheme} />}
             {(sessionsMode || recordsMode) && (
               <SessionsWorkspace
                 navMode={navMode}
@@ -656,7 +678,7 @@ export default function App() {
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(20,20,24,.34)",
+            background: "var(--c-overlay)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",

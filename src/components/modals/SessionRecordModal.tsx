@@ -51,19 +51,19 @@ function Bubble({
         marginBottom: 8,
       }}
     >
-      <span style={{ fontSize: 10, color: "#9a9aa0", marginBottom: 2 }}>{label}</span>
+      <span style={{ fontSize: 10, color: "var(--c-text-4)", marginBottom: 2 }}>{label}</span>
       <div
         style={{
           maxWidth: isUser ? "88%" : "96%",
           padding: "10px 12px",
           borderRadius: 12,
-          background: isUser ? "#e8f0fe" : "#f3f3f5",
-          border: `1px solid ${isUser ? "#c5d9f8" : "#e0e0e4"}`,
+          background: isUser ? "var(--c-user-bubble-bg)" : "var(--c-bg-3)",
+          border: `1px solid ${isUser ? "var(--c-user-bubble-border)" : "var(--c-border-2)"}`,
           fontSize: 13,
           lineHeight: 1.5,
           whiteSpace: useMarkdown ? "normal" : "pre-wrap",
           wordBreak: "break-word",
-          color: "#1d1d1f",
+          color: "var(--c-text)",
           maxHeight: isUser && expanded ? "40vh" : undefined,
           overflow: isUser && expanded ? "auto" : undefined,
         }}
@@ -186,7 +186,7 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
         maxWidth: "96vw",
         height: MODAL_VIEWPORT_HEIGHT,
         maxHeight: MODAL_VIEWPORT_HEIGHT,
-        background: "#fff",
+        background: "var(--c-bg)",
         borderRadius: 13,
         boxShadow: "0 24px 60px rgba(0,0,0,.4)",
         overflow: "hidden",
@@ -201,13 +201,13 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
           justifyContent: "space-between",
           padding: "14px 18px",
           borderBottom: "1px solid #ededf0",
-          background: "#fbfbfc",
+          background: "var(--c-bg-2)",
           flex: "none",
         }}
       >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: "#1d1d1f" }}>对话详情</div>
-          <div style={{ fontSize: 11, color: "#9a9aa0", marginTop: 2 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--c-text)" }}>对话详情</div>
+          <div style={{ fontSize: 11, color: "var(--c-text-4)", marginTop: 2 }}>
             {formatTimestamp(display.timestamp)} · {display.method} · {urlShort}
           </div>
         </div>
@@ -221,7 +221,7 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
             cursor: "pointer",
             fontSize: 20,
             lineHeight: 1,
-            color: "#9a9aa0",
+            color: "var(--c-text-4)",
             padding: "4px 8px",
             flex: "none",
           }}
@@ -233,7 +233,7 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "16px 20px" }}>
         {loading && (
-          <div style={{ fontSize: 12, color: "#9a9aa0" }}>加载对话内容…</div>
+          <div style={{ fontSize: 12, color: "var(--c-text-4)" }}>加载对话内容…</div>
         )}
         {error && !loading && (
           <div style={{ fontSize: 12, color: "#d23b30" }}>{error}</div>
@@ -273,7 +273,7 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
               <Bubble role="assistant" label="会话" body={display.preview_text} />
             )}
             {!bodies.user && !bodies.assistant && !bodies.rawReq && !bodies.rawResp && !display.preview_text && (
-              <div style={{ fontSize: 12, color: "#9a9aa0" }}>（无请求/响应 body）</div>
+              <div style={{ fontSize: 12, color: "var(--c-text-4)" }}>（无请求/响应 body）</div>
             )}
           </>
         )}
@@ -281,7 +281,7 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
           <Bubble role="assistant" label="会话" body={display.preview_text} />
         )}
         {!loading && !error && (!messages || messages.length === 0) && !bodies && !display.preview_text && (
-          <div style={{ fontSize: 12, color: "#9a9aa0" }}>（无请求/响应 body）</div>
+          <div style={{ fontSize: 12, color: "var(--c-text-4)" }}>（无请求/响应 body）</div>
         )}
       </div>
     </div>

@@ -9,7 +9,7 @@ const inputStyle: CSSProperties = {
   borderRadius: 8,
   padding: "8px 11px",
   font: "13px ui-monospace,Menlo,monospace",
-  color: "#1d1d1f",
+  color: "var(--c-text)",
   outline: "none",
 };
 const selectStyle: CSSProperties = {
@@ -17,10 +17,10 @@ const selectStyle: CSSProperties = {
   borderRadius: 8,
   padding: "8px 11px",
   font: "13px -apple-system,system-ui",
-  color: "#1d1d1f",
-  background: "#fff",
+  color: "var(--c-text)",
+  background: "var(--c-bg)",
 };
-const labelText: CSSProperties = { fontSize: 11.5, color: "#8a8a8e", display: "block", marginBottom: 5 };
+const labelText: CSSProperties = { fontSize: 11.5, color: "var(--c-text-3)", display: "block", marginBottom: 5 };
 
 type Props = {
   onClose: () => void;
@@ -49,10 +49,10 @@ export default function AddPageModal({ onClose, onOpenCertGuide, onSave, onOpenC
   };
 
   return (
-    <div onClick={(e) => e.stopPropagation()} style={{ width: 480, background: "#fff", borderRadius: 13, boxShadow: "0 24px 60px rgba(0,0,0,.4)", overflow: "hidden" }}>
+    <div onClick={(e) => e.stopPropagation()} style={{ width: 480, background: "var(--c-bg)", borderRadius: 13, boxShadow: "0 24px 60px rgba(0,0,0,.4)", overflow: "hidden" }}>
       <div style={{ padding: "18px 22px 0" }}>
-        <div style={{ fontSize: 16, fontWeight: 600, color: "#1d1d1f" }}>Add Page</div>
-        <div style={{ fontSize: 12, color: "#9a9aa0", marginTop: 2 }}>添加一个 URL，在应用内打开页面并抓包。</div>
+        <div style={{ fontSize: 16, fontWeight: 600, color: "var(--c-text)" }}>Add Page</div>
+        <div style={{ fontSize: 12, color: "var(--c-text-4)", marginTop: 2 }}>添加一个 URL，在应用内打开页面并抓包。</div>
       </div>
       <form
         onSubmit={(e: FormEvent) => {
@@ -79,12 +79,12 @@ export default function AddPageModal({ onClose, onOpenCertGuide, onSave, onOpenC
             <div style={selectStyle}>In-App Session ▾</div>
           </label>
         </div>
-        <div style={{ fontSize: 11.5, color: "#9a9aa0", background: "#f6f6f8", borderRadius: 8, padding: "10px 12px", lineHeight: 1.5, fontFamily: MONO }}>
+        <div style={{ fontSize: 11.5, color: "var(--c-text-4)", background: "var(--c-bg-2)", borderRadius: 8, padding: "10px 12px", lineHeight: 1.5, fontFamily: MONO }}>
           embedded webview + per-session local proxy
         </div>
         {error && <div style={{ fontSize: 12, color: "#d23b30" }}>{error}</div>}
       </form>
-      <div style={{ padding: "14px 22px", background: "#fafafb", borderTop: "1px solid #f0f0f2", display: "flex", justifyContent: "flex-end", gap: 9 }}>
+      <div style={{ padding: "14px 22px", background: "var(--c-bg-2)", borderTop: "1px solid #f0f0f2", display: "flex", justifyContent: "flex-end", gap: 9 }}>
         <button onClick={onClose} style={secondaryBtn} disabled={busy}>
           取消
         </button>

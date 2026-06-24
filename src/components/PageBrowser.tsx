@@ -346,7 +346,7 @@ export default function PageBrowser({
         display: "flex",
         flexDirection: "column",
         borderRight: inspectorOpen && active ? "1px solid #ededf0" : "none",
-        background: "#f6f6f8",
+        background: "var(--c-bg-2)",
         visibility: active ? "visible" : "hidden",
         pointerEvents: active ? "auto" : "none",
       }
@@ -370,7 +370,7 @@ export default function PageBrowser({
             padding: "6px 10px 6px 12px",
             borderBottom: "1px solid #ededf0",
             flex: "none",
-            background: "#fbfbfc",
+            background: "var(--c-bg-2)",
           }}
         >
           <span
@@ -378,7 +378,7 @@ export default function PageBrowser({
               flex: 1,
               minWidth: 0,
               fontSize: 11.5,
-              color: "#8a8a8e",
+              color: "var(--c-text-3)",
               fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
               whiteSpace: "nowrap",
               overflow: "hidden",
@@ -393,8 +393,8 @@ export default function PageBrowser({
             style={{
               flex: "none",
               fontSize: 11,
-              color: "#5a5a5e",
-              background: "#ededf0",
+              color: "var(--c-text-2)",
+              background: "var(--c-bg-4)",
               border: "0.5px solid #d9d9de",
               borderRadius: 6,
               padding: "3px 9px",
@@ -406,7 +406,7 @@ export default function PageBrowser({
           </button>
         </div>
       )}
-      <div ref={hostRef} style={{ flex: 1, minHeight: 0, position: "relative", background: "#ffffff" }}>
+      <div ref={hostRef} style={{ flex: 1, minHeight: 0, position: "relative", background: "var(--c-bg)" }}>
         {layoutActive && status === "loading" && (
           <div
             style={{
@@ -416,7 +416,7 @@ export default function PageBrowser({
               alignItems: "center",
               justifyContent: "center",
               fontSize: 12,
-              color: "#9a9aa0",
+              color: "var(--c-text-4)",
               pointerEvents: "none",
             }}
           >
@@ -438,8 +438,8 @@ export default function PageBrowser({
             }}
           >
             <div style={{ fontSize: 13, fontWeight: 600, color: "#d23b30" }}>页面加载失败</div>
-            <div style={{ fontSize: 12, color: "#8a8a8e", lineHeight: 1.5, maxWidth: 360 }}>{error}</div>
-            <div style={{ fontSize: 11.5, color: "#9a9aa0" }}>
+            <div style={{ fontSize: 12, color: "var(--c-text-3)", lineHeight: 1.5, maxWidth: 360 }}>{error}</div>
+            <div style={{ fontSize: 11.5, color: "var(--c-text-4)" }}>
               请确认 Certificates 已 Trusted，然后重新点击 Open &amp; Capture
             </div>
           </div>

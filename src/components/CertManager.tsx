@@ -36,8 +36,8 @@ export default function CertManager({ state, onInstall, onOpenGuide, onGenerate,
   return (
     <div style={{ flex: 1, overflow: "auto", minHeight: 0, padding: "28px 36px" }}>
       <div style={{ maxWidth: 640, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 21, fontWeight: 600, margin: "0 0 4px", color: "#1d1d1f" }}>Certificate Manager</h1>
-        <p style={{ fontSize: 13, color: "#8a8a8e", margin: "0 0 22px", lineHeight: 1.5 }}>
+        <h1 style={{ fontSize: 21, fontWeight: 600, margin: "0 0 4px", color: "var(--c-text)" }}>Certificate Manager</h1>
+        <p style={{ fontSize: 13, color: "var(--c-text-3)", margin: "0 0 22px", lineHeight: 1.5 }}>
           AppScope 使用本机生成的 Root CA 解密经其代理的 HTTPS 流量。私钥仅保存在本机，永不上传。
         </p>
 
@@ -50,22 +50,22 @@ export default function CertManager({ state, onInstall, onOpenGuide, onGenerate,
             gap: 18,
             alignItems: "center",
             marginBottom: 18,
-            background: "#fbfbfc",
+            background: "var(--c-bg-2)",
           }}
         >
-          <div style={{ width: 54, height: 54, borderRadius: 13, background: trusted ? "#e7f6ec" : "#f2f2f5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flex: "none" }}>
+          <div style={{ width: 54, height: 54, borderRadius: 13, background: trusted ? "#e7f6ec" : "var(--c-bg-3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flex: "none" }}>
             🛡
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "#1d1d1f" }}>AppScope Local CA</div>
-            <div style={{ fontSize: 12.5, color: "#8a8a8e", marginTop: 2 }}>{stateLabel(state)}</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--c-text)" }}>AppScope Local CA</div>
+            <div style={{ fontSize: 12.5, color: "var(--c-text-3)", marginTop: 2 }}>{stateLabel(state)}</div>
           </div>
           <span
             style={{
               fontSize: 12,
               fontWeight: 600,
-              color: trusted ? "#30a14e" : "#8a8a8e",
-              background: trusted ? "#e7f6ec" : "#f2f2f5",
+              color: trusted ? "#30a14e" : "var(--c-text-3)",
+              background: trusted ? "#e7f6ec" : "var(--c-bg-3)",
               borderRadius: 7,
               padding: "6px 12px",
             }}
@@ -88,8 +88,8 @@ export default function CertManager({ state, onInstall, onOpenGuide, onGenerate,
                       width: 26,
                       height: 26,
                       borderRadius: "50%",
-                      background: done ? "#30a14e" : "#e6e6ea",
-                      color: done ? "#fff" : "#8a8a8e",
+                      background: done ? "#30a14e" : "var(--c-border)",
+                      color: done ? "#fff" : "var(--c-text-3)",
                       fontSize: 13,
                       display: "flex",
                       alignItems: "center",
@@ -98,9 +98,9 @@ export default function CertManager({ state, onInstall, onOpenGuide, onGenerate,
                   >
                     {done ? "✓" : idx + 1}
                   </span>
-                  <span style={{ fontSize: 10.5, color: done ? "#30a14e" : "#8a8a8e", textAlign: "center" }}>{label}</span>
+                  <span style={{ fontSize: 10.5, color: done ? "#30a14e" : "var(--c-text-3)", textAlign: "center" }}>{label}</span>
                 </div>
-                {idx < STEPS.length - 1 && <span style={{ width: 26, height: 2, background: done ? "#30a14e" : "#e6e6ea", marginBottom: 16 }} />}
+                {idx < STEPS.length - 1 && <span style={{ width: 26, height: 2, background: done ? "#30a14e" : "var(--c-border)", marginBottom: 16 }} />}
               </div>
             );
           })}

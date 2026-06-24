@@ -29,15 +29,15 @@ export default function DeletePageModal({ pageName, onClose, onConfirm }: Props)
       onClick={(e) => e.stopPropagation()}
       style={{
         width: 420,
-        background: "#fff",
+        background: "var(--c-bg)",
         borderRadius: 13,
         boxShadow: "0 24px 60px rgba(0,0,0,.4)",
         overflow: "hidden",
       }}
     >
       <div style={{ padding: "18px 22px 0" }}>
-        <div style={{ fontSize: 16, fontWeight: 600, color: "#1d1d1f" }}>删除页面</div>
-        <div style={{ fontSize: 12.5, color: "#6e6e73", marginTop: 10, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 16, fontWeight: 600, color: "var(--c-text)" }}>删除页面</div>
+        <div style={{ fontSize: 12.5, color: "var(--c-text-2)", marginTop: 10, lineHeight: 1.5 }}>
           确定删除 <strong>{pageName}</strong>？相关会话和请求记录也会一并删除。
         </div>
       </div>

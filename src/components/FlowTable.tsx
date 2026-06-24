@@ -24,7 +24,7 @@ const GRID_B = "1fr 60px 60px 80px 130px 70px 200px";
 const headCell: CSSProperties = {
   fontSize: 10.5,
   fontWeight: 600,
-  color: "#9a9aa0",
+  color: "var(--c-text-4)",
   textTransform: "uppercase",
   letterSpacing: ".03em",
 };
@@ -120,8 +120,8 @@ export default function FlowTable(p: Props) {
   const rowA = (f: Flow) => {
     const sel = f.id === p.selectedId;
     const { sCol, text } = renderStatus(f, sel);
-    const fg = sel ? "#fff" : "#1d1d1f";
-    const sub = sel ? "rgba(255,255,255,.82)" : "#9a9aa0";
+    const fg = sel ? "#fff" : "var(--c-text)";
+    const sub = sel ? "rgba(255,255,255,.82)" : "var(--c-text-4)";
     return (
       <button
         key={f.id}
@@ -156,8 +156,8 @@ export default function FlowTable(p: Props) {
   const rowB = (f: Flow) => {
     const sel = f.id === p.selectedId;
     const { sCol, text } = renderStatus(f, sel);
-    const fg = sel ? "#fff" : "#1d1d1f";
-    const sub = sel ? "rgba(255,255,255,.82)" : "#9a9aa0";
+    const fg = sel ? "#fff" : "var(--c-text)";
+    const sub = sel ? "rgba(255,255,255,.82)" : "var(--c-text-4)";
     const t0 = flowT0(f);
     const dur = f.time || (f.status == null ? 0 : 6);
     const wfColor = sel ? "#fff" : catColor(catFn(f.type));
@@ -209,7 +209,7 @@ export default function FlowTable(p: Props) {
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
       {/* toolbar */}
-      <div style={{ flex: "none", borderBottom: "1px solid #ececef", padding: "8px 12px", display: "flex", alignItems: "center", gap: 10, background: "#fbfbfc" }}>
+      <div style={{ flex: "none", borderBottom: "1px solid #ececef", padding: "8px 12px", display: "flex", alignItems: "center", gap: 10, background: "var(--c-bg-2)" }}>
         <button
           onClick={p.onToggleRecord}
           style={{
@@ -218,8 +218,8 @@ export default function FlowTable(p: Props) {
             cursor: "pointer",
             font: "11.5px -apple-system,system-ui",
             fontWeight: 500,
-            color: p.recording ? "#c0392b" : "#6e6e73",
-            background: "#fff",
+            color: p.recording ? "#c0392b" : "var(--c-text-2)",
+            background: "var(--c-bg)",
             borderRadius: 7,
             padding: "4px 10px",
             display: "flex",
@@ -227,20 +227,20 @@ export default function FlowTable(p: Props) {
             gap: 6,
           }}
         >
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.recording ? "#c0392b" : "#b0b0b6", animation: p.recording ? "ascPulse 1.4s infinite" : undefined }} />
+          <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.recording ? "#c0392b" : "var(--c-text-4)", animation: p.recording ? "ascPulse 1.4s infinite" : undefined }} />
           {p.recording ? "Recording" : "Paused"}
         </button>
-        <button onClick={p.onClear} title="清空" style={{ appearance: "none", border: "none", background: "none", cursor: "pointer", color: "#8a8a8e", fontSize: 14, padding: "4px 6px" }}>
+        <button onClick={p.onClear} title="清空" style={{ appearance: "none", border: "none", background: "none", cursor: "pointer", color: "var(--c-text-3)", fontSize: 14, padding: "4px 6px" }}>
           ⌫
         </button>
-        <div style={{ width: 1, height: 18, background: "#e2e2e6" }} />
-        <div style={{ display: "flex", alignItems: "center", gap: 5, background: "#f1f1f3", borderRadius: 7, padding: "4px 9px", flex: 1, maxWidth: 260 }}>
-          <span style={{ color: "#9a9aa0", fontSize: 11 }}>⌕</span>
+        <div style={{ width: 1, height: 18, background: "var(--c-border)" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 5, background: "var(--c-divider)", borderRadius: 7, padding: "4px 9px", flex: 1, maxWidth: 260 }}>
+          <span style={{ color: "var(--c-text-4)", fontSize: 11 }}>⌕</span>
           <input
             value={p.query}
             onChange={(e) => p.onQuery(e.target.value)}
             placeholder="Filter URL / path"
-            style={{ flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", font: "11.5px ui-monospace,Menlo,monospace", color: "#1d1d1f" }}
+            style={{ flex: 1, minWidth: 0, border: "none", background: "none", outline: "none", font: "11.5px ui-monospace,Menlo,monospace", color: "var(--c-text)" }}
           />
         </div>
         <div style={{ flex: 1 }} />
@@ -251,7 +251,7 @@ export default function FlowTable(p: Props) {
               <button
                 key={k}
                 onClick={() => p.onFilter(k)}
-                style={{ ...chipBase, background: on ? ACCENT : "transparent", color: on ? "#fff" : "#6e6e73", fontWeight: on ? 600 : 400 }}
+                style={{ ...chipBase, background: on ? ACCENT : "transparent", color: on ? "#fff" : "var(--c-text-2)", fontWeight: on ? 600 : 400 }}
               >
                 {label}
               </button>
@@ -264,7 +264,7 @@ export default function FlowTable(p: Props) {
       {p.variant === "A" && (
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0 }}>
-            <div style={{ flex: "none", display: "grid", gridTemplateColumns: GRID_A, padding: "6px 12px", borderBottom: "1px solid #ececef", background: "#fafafb" }}>
+            <div style={{ flex: "none", display: "grid", gridTemplateColumns: GRID_A, padding: "6px 12px", borderBottom: "1px solid #ececef", background: "var(--c-bg-2)" }}>
               <div style={headCell}>Status</div>
               <div style={headCell}>Method</div>
               <div style={headCell}>Path</div>
@@ -276,7 +276,7 @@ export default function FlowTable(p: Props) {
             <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>{filtered.map(rowA)}</div>
           </div>
           <div onMouseDown={detailX.onMouseDown} style={{ width: 5, flex: "none", cursor: "col-resize", position: "relative", zIndex: 1 }}>
-            <div style={{ position: "absolute", left: 2, top: 0, bottom: 0, width: 1, background: "#ececef" }} />
+            <div style={{ position: "absolute", left: 2, top: 0, bottom: 0, width: 1, background: "var(--c-bg-4)" }} />
           </div>
           <div ref={detailX.panelRef} style={{ width: detailX.size, flex: "none", minHeight: 0 }}>
             <FlowDetail flow={selectedFlow} />
@@ -288,7 +288,7 @@ export default function FlowTable(p: Props) {
       {p.variant === "B" && (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <div style={{ flex: "none", display: "grid", gridTemplateColumns: GRID_B, padding: "6px 12px", borderBottom: "1px solid #ececef", background: "#fafafb" }}>
+            <div style={{ flex: "none", display: "grid", gridTemplateColumns: GRID_B, padding: "6px 12px", borderBottom: "1px solid #ececef", background: "var(--c-bg-2)" }}>
               <div style={headCell}>Name</div>
               <div style={headCell}>Status</div>
               <div style={headCell}>Method</div>
@@ -300,7 +300,7 @@ export default function FlowTable(p: Props) {
             <div style={{ flex: 1, overflow: "auto", minHeight: 0 }}>{filtered.map(rowB)}</div>
           </div>
           <div onMouseDown={detailY.onMouseDown} style={{ height: 5, flex: "none", cursor: "row-resize", position: "relative", zIndex: 1 }}>
-            <div style={{ position: "absolute", top: 2, left: 0, right: 0, height: 1, background: "#e0e0e4" }} />
+            <div style={{ position: "absolute", top: 2, left: 0, right: 0, height: 1, background: "var(--c-border-2)" }} />
           </div>
           <div ref={detailY.panelRef} style={{ height: detailY.size, flex: "none", minHeight: 0, boxShadow: "0 -1px 4px rgba(0,0,0,.04)" }}>
             <FlowDetail flow={selectedFlow} />

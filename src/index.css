@@ -1,3 +1,64 @@
+/* ─── Theme tokens ─────────────────────────────────────────────────────────── */
+:root {
+  /* text */
+  --c-text:        #1d1d1f;
+  --c-text-2:      #5a5a5e;
+  --c-text-3:      #8a8a8e;
+  --c-text-4:      #9a9aa0;
+  /* backgrounds */
+  --c-bg:          #ffffff;
+  --c-bg-2:        #fbfbfc;
+  --c-bg-3:        #f3f3f5;
+  --c-bg-4:        #ededf0;
+  --c-divider:     #f1f1f3;
+  /* borders */
+  --c-border:      #e6e6ea;
+  --c-border-2:    #e0e0e4;
+  --c-border-3:    #d8d8dc;
+  /* accent */
+  --c-accent:      #007aff;
+  --c-accent-soft: rgba(0, 122, 255, 0.12);
+  /* misc */
+  --c-switch-off:  #d4d4da;
+  --c-hover:       rgba(0, 0, 0, 0.04);
+  --c-selected:    rgba(0, 122, 255, 0.12);
+  --c-overlay:     rgba(20, 20, 24, 0.34);
+  /* title bar */
+  --c-titlebar-bg: linear-gradient(180deg, #ededef, #e3e3e7);
+  --c-titlebar-border: #cccdd2;
+  /* header gradient */
+  --c-header-bg:   linear-gradient(180deg, #fbfbfc 0%, #f6f6f8 100%);
+  /* chat bubbles */
+  --c-user-bubble-bg: #e8f0fe;
+  --c-user-bubble-border: #c5d9f8;
+}
+
+html[data-theme="dark"] {
+  --c-text:        #f5f5f7;
+  --c-text-2:      #c7c7cc;
+  --c-text-3:      #aeaeb2;
+  --c-text-4:      #8e8e93;
+  --c-bg:          #1c1c1e;
+  --c-bg-2:        #2c2c2e;
+  --c-bg-3:        #3a3a3c;
+  --c-bg-4:        #3a3a3c;
+  --c-divider:     #2c2c2e;
+  --c-border:      #3a3a3c;
+  --c-border-2:    #48484a;
+  --c-border-3:    #636366;
+  --c-accent:      #0a84ff;
+  --c-accent-soft: rgba(10, 132, 255, 0.18);
+  --c-switch-off:  #48484a;
+  --c-hover:       rgba(255, 255, 255, 0.06);
+  --c-selected:    rgba(10, 132, 255, 0.18);
+  --c-overlay:     rgba(0, 0, 0, 0.6);
+  --c-titlebar-bg: linear-gradient(180deg, #2c2c2e, #252527);
+  --c-titlebar-border: #1c1c1e;
+  --c-header-bg:   linear-gradient(180deg, #2c2c2e 0%, #252527 100%);
+  --c-user-bubble-bg: rgba(10, 132, 255, 0.12);
+  --c-user-bubble-border: rgba(10, 132, 255, 0.3);
+}
+
 /* AppScope global styles — ported from AppScope.dc.html <helmet> block. */
 @keyframes ascPulse {
   0%, 100% { opacity: 1; }
@@ -84,11 +145,11 @@
 }
 
 .asc-sidebar-row:hover:not(.asc-sidebar-row--selected) {
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--c-hover);
 }
 
 .asc-sidebar-row--selected {
-  background: rgba(0, 122, 255, 0.12);
+  background: var(--c-selected);
 }
 
 .asc-sidebar-row__delete {
@@ -136,7 +197,7 @@ body {
   height: 11px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #c4c4ca;
+  background: var(--c-border-2, #c4c4ca);
   border-radius: 6px;
   border: 3px solid transparent;
   background-clip: content-box;
@@ -146,7 +207,7 @@ body {
 .asc-conversation-md {
   font-size: 13px;
   line-height: 1.55;
-  color: #1d1d1f;
+  color: var(--c-text);
   word-break: break-word;
 }
 
@@ -169,7 +230,7 @@ body {
   margin: 0.9em 0 0.45em;
   font-weight: 600;
   line-height: 1.35;
-  color: #1d1d1f;
+  color: var(--c-text);
 }
 
 .asc-conversation-md h1 { font-size: 1.15em; }
@@ -182,7 +243,7 @@ body {
 
 .asc-conversation-md hr {
   border: none;
-  border-top: 1px solid #e0e0e4;
+  border-top: 1px solid var(--c-border-2);
   margin: 0.75em 0;
 }
 
@@ -205,21 +266,21 @@ body {
 
 .asc-conversation-md th,
 .asc-conversation-md td {
-  border: 1px solid #e0e0e4;
+  border: 1px solid var(--c-border-2);
   padding: 6px 8px;
   text-align: left;
   vertical-align: top;
 }
 
 .asc-conversation-md th {
-  background: #f0f0f3;
+  background: var(--c-bg-3);
   font-weight: 600;
 }
 
 .asc-conversation-md code {
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 0.92em;
-  background: #ebebef;
+  background: var(--c-bg-4);
   border-radius: 4px;
   padding: 0.1em 0.35em;
 }
@@ -227,7 +288,7 @@ body {
 .asc-conversation-md pre {
   margin: 0.5em 0;
   padding: 10px 12px;
-  background: #ebebef;
+  background: var(--c-bg-4);
   border-radius: 8px;
   overflow: auto;
 }
@@ -238,7 +299,7 @@ body {
 }
 
 .asc-conversation-md a {
-  color: #007aff;
+  color: var(--c-accent);
   text-decoration: none;
 }
 

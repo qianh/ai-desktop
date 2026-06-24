@@ -33,9 +33,9 @@ const wrap: CSSProperties = {
   height: "100%",
   display: "flex",
   flexDirection: "column",
-  background: "#ffffff",
+  background: "var(--c-bg)",
   fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif",
-  color: "#1d1d1f",
+  color: "var(--c-text)",
   minHeight: 0,
   overflow: "hidden",
 };
@@ -52,7 +52,7 @@ const revealBtn: CSSProperties = {
   appearance: "none",
   border: "none",
   background: "none",
-  color: "#007aff",
+  color: "var(--c-accent)",
   cursor: "pointer",
   font: "11px -apple-system,system-ui",
   padding: 0,
@@ -62,7 +62,7 @@ const preStyle: CSSProperties = {
   margin: 0,
   padding: "14px 16px",
   font: "12px/1.65 ui-monospace,'SF Mono',Menlo,monospace",
-  color: "#1d1d1f",
+  color: "var(--c-text)",
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
 };
@@ -73,9 +73,9 @@ const bodyTypeBar: CSSProperties = {
   alignItems: "center",
   borderBottom: "1px solid #f3f3f5",
   fontSize: 11,
-  color: "#8a8a8e",
+  color: "var(--c-text-3)",
 };
-const emptyMsg: CSSProperties = { padding: "24px 16px", color: "#98989d", fontSize: 12.5 };
+const emptyMsg: CSSProperties = { padding: "24px 16px", color: "var(--c-text-4)", fontSize: 12.5 };
 
 export default function FlowDetail({ flow }: { flow: Flow | null }) {
   const [tab, setTab] = useState("overview");
@@ -94,11 +94,11 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
             alignItems: "center",
             justifyContent: "center",
             gap: 10,
-            color: "#b0b0b5",
+            color: "var(--c-text-4)",
           }}
         >
           <div style={{ width: 40, height: 40, borderRadius: 9, border: "1.5px dashed #d4d4d8" }} />
-          <div style={{ fontSize: 12.5, color: "#98989d" }}>选择一条请求查看详情</div>
+          <div style={{ fontSize: 12.5, color: "var(--c-text-4)" }}>选择一条请求查看详情</div>
         </div>
       </div>
     );
@@ -115,8 +115,8 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
       const hidden = sens && !revealed[id];
       return (
         <div key={id} style={headerRow}>
-          <div style={{ color: "#6e6e73", wordBreak: "break-all" }}>{h.name}</div>
-          <div style={{ color: "#1d1d1f", wordBreak: "break-all", display: "flex", gap: 8, alignItems: "baseline" }}>
+          <div style={{ color: "var(--c-text-2)", wordBreak: "break-all" }}>{h.name}</div>
+          <div style={{ color: "var(--c-text)", wordBreak: "break-all", display: "flex", gap: 8, alignItems: "baseline" }}>
             <span style={{ flex: 1, minWidth: 0 }}>{hidden ? MASK : h.value}</span>
             {sens && (
               <button onClick={() => toggle(id)} style={revealBtn}>
@@ -146,8 +146,8 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
             alignItems: "baseline",
           }}
         >
-          <div style={{ color: "#6e6e73" }}>{c.name}</div>
-          <div style={{ color: "#1d1d1f", wordBreak: "break-all", display: "flex", gap: 8 }}>
+          <div style={{ color: "var(--c-text-2)" }}>{c.name}</div>
+          <div style={{ color: "var(--c-text)", wordBreak: "break-all", display: "flex", gap: 8 }}>
             <span style={{ flex: 1, minWidth: 0 }}>{hidden ? MASK_SHORT : c.value}</span>
             {sens && (
               <button onClick={() => toggle(id)} style={revealBtn}>
@@ -207,7 +207,7 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
           alignItems: "center",
           gap: 9,
           flex: "none",
-          background: "#fbfbfc",
+          background: "var(--c-bg-2)",
         }}
       >
         <span
@@ -225,7 +225,7 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
         <span
           style={{
             font: "500 12px ui-monospace,'SF Mono',Menlo,monospace",
-            color: "#1d1d1f",
+            color: "var(--c-text)",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
@@ -254,7 +254,7 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
           borderBottom: "1px solid #ededf0",
           flex: "none",
           overflowX: "auto",
-          background: "#fbfbfc",
+          background: "var(--c-bg-2)",
         }}
       >
         {tabsDef.map(([key, label]) => (
@@ -270,8 +270,8 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
               fontSize: 12,
               padding: "9px 11px",
               whiteSpace: "nowrap",
-              borderBottom: "2px solid " + (tab === key ? "#007aff" : "transparent"),
-              color: tab === key ? "#007aff" : "#6e6e73",
+              borderBottom: "2px solid " + (tab === key ? "var(--c-accent)" : "transparent"),
+              color: tab === key ? "var(--c-accent)" : "var(--c-text-2)",
               fontWeight: tab === key ? 590 : 400,
             }}
           >
@@ -296,8 +296,8 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
             >
               {overviewRows.map(([k, v]) => (
                 <div key={k} style={{ display: "contents" }}>
-                  <div style={{ color: "#8a8a8e" }}>{k}</div>
-                  <div style={{ color: "#1d1d1f", fontFamily: "ui-monospace,'SF Mono',Menlo,monospace", wordBreak: "break-all" }}>
+                  <div style={{ color: "var(--c-text-3)" }}>{k}</div>
+                  <div style={{ color: "var(--c-text)", fontFamily: "ui-monospace,'SF Mono',Menlo,monospace", wordBreak: "break-all" }}>
                     {v}
                   </div>
                 </div>
@@ -324,7 +324,7 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
             <div style={emptyMsg}>无响应 Body</div>
           ) : isBinary ? (
             <div style={{ padding: "18px 16px" }}>
-              <div style={{ fontSize: 11, color: "#8a8a8e", marginBottom: 10 }}>{respBody.ctype}</div>
+              <div style={{ fontSize: 11, color: "var(--c-text-3)", marginBottom: 10 }}>{respBody.ctype}</div>
               <div
                 style={{
                   height: 150,
@@ -334,7 +334,7 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  color: "#a0a0a6",
+                  color: "var(--c-text-4)",
                   font: "11px ui-monospace,Menlo,monospace",
                 }}
               >
@@ -350,15 +350,15 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
 
         {tab === "cookies" && (
           <div style={{ padding: "14px 16px" }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#8a8a8e", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 8 }}>
               Request Cookies
             </div>
-            {reqCookieRows.length === 0 ? <div style={{ color: "#98989d", fontSize: 12.5, marginBottom: 18 }}>无</div> : reqCookieRows}
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#8a8a8e", textTransform: "uppercase", letterSpacing: ".04em", margin: "18px 0 8px" }}>
+            {reqCookieRows.length === 0 ? <div style={{ color: "var(--c-text-4)", fontSize: 12.5, marginBottom: 18 }}>无</div> : reqCookieRows}
+            <div style={{ fontSize: 11, fontWeight: 600, color: "var(--c-text-3)", textTransform: "uppercase", letterSpacing: ".04em", margin: "18px 0 8px" }}>
               Response Cookies
             </div>
             {respCookies.length === 0 ? (
-              <div style={{ color: "#98989d", fontSize: 12.5 }}>无</div>
+              <div style={{ color: "var(--c-text-4)", fontSize: 12.5 }}>无</div>
             ) : (
               respCookies.map((c, i) => {
                 const id = "sc" + i;
@@ -368,15 +368,15 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
                 return (
                   <div key={id} style={{ border: "1px solid #ededf0", borderRadius: 8, padding: "10px 12px", marginBottom: 8, font: "12px ui-monospace,Menlo,monospace" }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                      <span style={{ color: "#6e6e73" }}>{c.name}</span>
-                      <span style={{ color: "#1d1d1f", flex: 1, minWidth: 0, wordBreak: "break-all" }}>{hidden ? MASK_SHORT : c.value}</span>
+                      <span style={{ color: "var(--c-text-2)" }}>{c.name}</span>
+                      <span style={{ color: "var(--c-text)", flex: 1, minWidth: 0, wordBreak: "break-all" }}>{hidden ? MASK_SHORT : c.value}</span>
                       {sens && (
                         <button onClick={() => toggle(id)} style={revealBtn}>
                           {revealed[id] ? "Hide" : "Reveal"}
                         </button>
                       )}
                     </div>
-                    {meta && <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 5, color: "#8a8a8e" }}>{meta}</div>}
+                    {meta && <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 5, color: "var(--c-text-3)" }}>{meta}</div>}
                   </div>
                 );
               })
@@ -391,7 +391,7 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
                 <div key={s.label} style={{ width: `${((s.ms / total) * 100).toFixed(2)}%`, background: s.color }} />
               ))}
             </div>
-            <div style={{ fontSize: 11, color: "#8a8a8e", textAlign: "right", marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: "var(--c-text-3)", textAlign: "right", marginBottom: 14 }}>
               总计 {f.time != null ? f.time + " ms" : "—"}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr auto", rowGap: 2, fontSize: 12.5 }}>
@@ -399,9 +399,9 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
                 <div key={s.label} style={{ display: "contents" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderBottom: "1px solid #f3f3f5" }}>
                     <span style={{ width: 9, height: 9, borderRadius: 2, background: s.color, flex: "none" }} />
-                    <span style={{ color: "#1d1d1f" }}>{s.label}</span>
+                    <span style={{ color: "var(--c-text)" }}>{s.label}</span>
                   </div>
-                  <div style={{ padding: "5px 0", borderBottom: "1px solid #f3f3f5", fontFamily: "ui-monospace,Menlo,monospace", color: "#6e6e73", textAlign: "right" }}>
+                  <div style={{ padding: "5px 0", borderBottom: "1px solid #f3f3f5", fontFamily: "ui-monospace,Menlo,monospace", color: "var(--c-text-2)", textAlign: "right" }}>
                     {s.ms.toFixed(1)} ms
                   </div>
                 </div>
@@ -427,7 +427,7 @@ export default function FlowDetail({ flow }: { flow: Flow | null }) {
                 borderRadius: 8,
                 padding: "11px 12px",
                 font: "13px/1.6 -apple-system,system-ui",
-                color: "#1d1d1f",
+                color: "var(--c-text)",
                 outline: "none",
               }}
             />
