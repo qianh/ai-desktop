@@ -6,28 +6,22 @@ import {
   getCertificateStatus,
   installCertificate,
   getFlowDetail,
-  launchApp,
-  listApps,
   listFlows,
   listPages,
-  mapApiApp,
   mapApiPage,
   mapFlowListItem,
   openCertificateGuide,
   uploadInterceptsToSupabase,
   closePageWebview,
   openPageWithCapture,
-  removeApp,
   removeCertificate,
   removePage,
-  saveApp,
   savePage,
   setPageInterceptReporting,
   stopSession,
-  type ApiApp,
 } from "./api";
 
-import type { AppEntry, Flow, InterceptedFetch, Page } from "./types";
+import type { Flow, InterceptedFetch, Page } from "./types";
 import TitleBar from "./components/TitleBar";
 import StatusBar from "./components/StatusBar";
 import Sidebar from "./components/Sidebar";
@@ -44,13 +38,11 @@ import {
   pickStartupPageId,
 } from "./lib/ensureDefaultPage";
 import AddPageModal from "./components/modals/AddPageModal";
-import AddAppModal from "./components/modals/AddAppModal";
 import CertGuideModal from "./components/modals/CertGuideModal";
 import DeletePageModal from "./components/modals/DeletePageModal";
-import DeleteAppModal from "./components/modals/DeleteAppModal";
 
 type NavMode = "sessions" | "records" | "certs" | "settings";
-type ModalKind = null | "addPage" | "addApp" | "certGuide";
+type ModalKind = null | "addPage" | "certGuide";
 
 type PageSessionMeta = {
   sessionId: string;
@@ -60,7 +52,6 @@ type PageSessionMeta = {
 
 export default function App() {
   const [pages, setPages] = useState<Page[]>([]);
-  const [apps, setApps] = useState<AppEntry[]>([]);
   const [flowsByPage, setFlowsByPage] = useState<Record<string, Flow[]>>({});
   const [sessionsByPage, setSessionsByPage] = useState<Record<string, string>>({});
   const [sessionMetaByPage, setSessionMetaByPage] = useState<Record<string, PageSessionMeta>>({});
@@ -77,14 +68,12 @@ export default function App() {
   const [modal, setModal] = useState<ModalKind>(null);
   const [clear, setClear] = useState<Record<string, boolean>>({});
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
-  const [launchMode, setLaunchMode] = useState("normal");
   const [toggles, setToggles] = useState<Toggles>({ mask: true, quic: true, login: false, autoclean: true });
   const [certState, setCertState] = useState("NotGenerated");
   const [captureBusy, setCaptureBusy] = useState(false);
   const captureInFlight = useRef<Set<string>>(new Set());
   const autoCaptureAttempted = useRef<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const [deleteAppTarget, setDeleteAppTarget] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [interceptsByPage, setInterceptsByPage] = useState<Record<string, InterceptedFetch[]>>({});
 
@@ -101,15 +90,6 @@ export default function App() {
         return mapped;
       });
     });
-  }, []);
-
-  const refreshApps = useCallback(async () => {
-    const apiApps = await listApps();
-    setApps(
-      apiApps.map((app) =>
-        mapApiApp(app, app.id || app.bundle_id)
-      )
-    );
   }, []);
 
   const refreshCert = useCallback(async () => {
@@ -134,7 +114,7 @@ export default function App() {
         setLoading(true);
         await ensureDefaultPage();
         await ensureChatInterceptReporting();
-        await Promise.all([refreshPages(), refreshApps(), refreshCert()]);
+        await Promise.all([refreshPages(), refreshCert()]);
         setError(null);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -142,7 +122,7 @@ export default function App() {
         setLoading(false);
       }
     })();
-  }, [refreshApps, refreshCert, refreshPages]);
+  }, [refreshCert, refreshPages]);
 
   useEffect(() => {
     if (!activeId && pages.length > 0) {
@@ -167,12 +147,10 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [pages, recording, refreshFlowsForPage, sessionsByPage]);
 
-  const find = (id: string) => pages.find((p) => p.id === id) || apps.find((a) => a.id === id);
-  const isAppId = (id: string) => !!apps.find((a) => a.id === id);
+  const find = (id: string) => pages.find((p) => p.id === id);
 
   const activeFlows = (id?: string) => {
     const a = id || activeId;
-    if (isAppId(a)) return [];
     if (clear[a]) return [];
     return flowsByPage[a] || pages.find((p) => p.id === a)?.flows || [];
   };
@@ -184,13 +162,10 @@ export default function App() {
   };
 
   const selectSession = (id: string) => {
-    const app = isAppId(id);
     setNavMode("sessions");
     setActiveId(id);
-    if (!app) {
-      setSelectedFlowId(firstId(id));
-      autoCaptureAttempted.current.delete(id);
-    }
+    setSelectedFlowId(firstId(id));
+    autoCaptureAttempted.current.delete(id);
   };
 
   const handleOpenSessionRecords = () => {
@@ -198,7 +173,6 @@ export default function App() {
   };
 
   const active = find(activeId);
-  const isApp = isAppId(activeId);
   const sessionsMode = navMode === "sessions";
   const recordsMode = navMode === "records";
   const flows = activeFlows();
@@ -211,7 +185,7 @@ export default function App() {
       : recordsMode
       ? "会话记录"
       : active
-      ? isApp || !("host" in active) || !isDefaultChatPage(active.host)
+      ? !isDefaultChatPage(active.host)
         ? active.name
         : DEFAULT_PAGE_DISPLAY_NAME
       : "AppScope";
@@ -220,10 +194,6 @@ export default function App() {
     ? `Error · ${error}`
     : loading
     ? "Loading…"
-    : isApp
-    ? active
-      ? `${active.name} · Normal launch`
-      : ""
     : recording
     ? "Recording"
     : "Idle";
@@ -424,16 +394,6 @@ export default function App() {
     }
   };
 
-  const handleSaveApp = async (app: ApiApp) => {
-    await saveApp(app);
-    await refreshApps();
-    setModal(null);
-  };
-
-  const handleLaunchApp = async (appId: string) => {
-    await launchApp(appId);
-  };
-
   const handleSelectFlow = async (flowId: string) => {
     setSelectedFlowId(flowId);
     try {
@@ -502,36 +462,12 @@ export default function App() {
     });
 
     if (activeId === pageId) {
-      setActiveId(remainingPages[0]?.id || apps[0]?.id || "");
+      setActiveId(remainingPages[0]?.id || "");
       setSelectedFlowId(null);
     }
 
     setDeleteTarget(null);
     await refreshPages();
-  };
-
-  const handleDeleteApp = (appId: string) => {
-    const app = apps.find((a) => a.id === appId);
-    setDeleteAppTarget({ id: appId, name: app?.name || "App" });
-  };
-
-  const confirmDeleteApp = async () => {
-    if (!deleteAppTarget) return;
-    const appId = deleteAppTarget.id;
-
-    setError(null);
-    await removeApp(appId);
-
-    const remainingApps = apps.filter((a) => a.id !== appId);
-    setApps(remainingApps);
-
-    if (activeId === appId) {
-      setActiveId(remainingApps[0]?.id || pages[0]?.id || "");
-      setSelectedFlowId(null);
-    }
-
-    setDeleteAppTarget(null);
-    await refreshApps();
   };
 
   const handleStopRecording = async () => {
@@ -563,12 +499,11 @@ export default function App() {
   );
 
   const activeSessionMeta = sessionMetaByPage[activeId];
-  const overlayOpen = modal != null || deleteAppTarget != null;
+  const overlayOpen = modal != null;
 
   useEffect(() => {
     if (
       !sessionsMode ||
-      isApp ||
       !activeId ||
       activeSessionMeta ||
       loading ||
@@ -580,7 +515,7 @@ export default function App() {
 
     autoCaptureAttempted.current.add(activeId);
     void handleStartCaptureForPage(activeId);
-  }, [activeId, activeSessionMeta, captureBusy, isApp, loading, sessionsMode]);
+  }, [activeId, activeSessionMeta, captureBusy, loading, sessionsMode]);
 
   return (
     <div
@@ -614,7 +549,6 @@ export default function App() {
         <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
           <Sidebar
             pages={enrichedPages}
-            apps={apps}
             navMode={navMode}
             activeId={activeId}
             query={query}
@@ -626,9 +560,7 @@ export default function App() {
             sessionRecordsActive={recordsMode}
             onDeletePage={handleDeletePage}
             onToggleInterceptReporting={handleToggleInterceptReporting}
-            onDeleteApp={handleDeleteApp}
             onAddPage={() => setModal("addPage")}
-            onAddApp={() => setModal("addApp")}
             onCerts={() => setNavMode("certs")}
             onSettings={() => setNavMode("settings")}
           />
@@ -678,9 +610,7 @@ export default function App() {
               <SessionsWorkspace
                 navMode={navMode}
                 activeId={activeId}
-                isApp={isApp}
                 pages={pages}
-                active={active}
                 sessionMetaByPage={sessionMetaByPage}
                 flowsByPage={flowsByPage}
                 flows={flows}
@@ -695,7 +625,6 @@ export default function App() {
                 selectedFlowId={selectedFlowId}
                 recording={recording}
                 captureBusy={captureBusy}
-                launchMode={launchMode}
                 onToggleInspector={toggleInspector}
                 onSelectFlow={handleSelectFlow}
                 onQuery={setQuery}
@@ -703,8 +632,6 @@ export default function App() {
                 onToggleRecord={handleStopRecording}
                 onClearFlows={clearFlows}
                 onStartCapture={handleStartCaptureForPage}
-                onLaunchMode={setLaunchMode}
-                onLaunchApp={handleLaunchApp}
               />
             )}
           </div>
@@ -720,10 +647,10 @@ export default function App() {
         />
       </div>
 
-      {(modal != null || deleteTarget != null || deleteAppTarget != null) && (
+      {(modal != null || deleteTarget != null) && (
         <div
           onClick={() => {
-            if (deleteTarget || deleteAppTarget) return;
+            if (deleteTarget) return;
             setModal(null);
           }}
           style={{
@@ -744,13 +671,6 @@ export default function App() {
               onConfirm={confirmDeletePage}
             />
           )}
-          {deleteAppTarget && (
-            <DeleteAppModal
-              appName={deleteAppTarget.name}
-              onClose={() => setDeleteAppTarget(null)}
-              onConfirm={confirmDeleteApp}
-            />
-          )}
           {modal === "addPage" && (
             <AddPageModal
               onClose={() => setModal(null)}
@@ -758,9 +678,6 @@ export default function App() {
               onOpenCapture={handleOpenCapture}
               onOpenCertGuide={() => setModal("certGuide")}
             />
-          )}
-          {modal === "addApp" && (
-            <AddAppModal onClose={() => setModal(null)} onSave={handleSaveApp} />
           )}
           {modal === "certGuide" && (
             <CertGuideModal

@@ -7,7 +7,6 @@ export type DerivePagePanelInput = {
   navMode: NavMode;
   activeId: string;
   pageId: string;
-  isActiveSelectionApp: boolean;
   hasSessionForPage: boolean;
   deleteTargetId: string | null;
   overlayOpen: boolean;
@@ -18,13 +17,12 @@ export function derivePagePanelState(input: DerivePagePanelInput): PagePanelStat
     navMode,
     activeId,
     pageId,
-    isActiveSelectionApp,
     hasSessionForPage,
     deleteTargetId,
     overlayOpen,
   } = input;
 
-  if (isActiveSelectionApp || !hasSessionForPage || activeId !== pageId) {
+  if (!hasSessionForPage || activeId !== pageId) {
     return "hidden";
   }
 
@@ -45,7 +43,6 @@ export function derivePagePanelState(input: DerivePagePanelInput): PagePanelStat
 
 export type DeriveWorkspaceChromeInput = {
   navMode: NavMode;
-  isApp: boolean;
   hasActiveSession: boolean;
   deleteTargetId: string | null;
   flowCount: number;
@@ -57,23 +54,21 @@ export type WorkspaceChrome = {
   showEmpty: boolean;
   showDeletePlaceholder: boolean;
   showFlows: boolean;
-  showApp: boolean;
 };
 
 export function deriveWorkspaceChrome(input: DeriveWorkspaceChromeInput): WorkspaceChrome {
-  const { navMode, isApp, hasActiveSession, deleteTargetId, flowCount, loading } = input;
+  const { navMode, hasActiveSession, deleteTargetId, flowCount, loading } = input;
   const sessionsMode = navMode === "sessions";
 
   const showPageCapture =
-    sessionsMode && !isApp && hasActiveSession && deleteTargetId === null;
+    sessionsMode && hasActiveSession && deleteTargetId === null;
 
   return {
-    showApp: sessionsMode && isApp,
     showPageCapture,
     showEmpty:
-      sessionsMode && !isApp && !showPageCapture && flowCount === 0 && !loading && deleteTargetId === null,
-    showDeletePlaceholder: sessionsMode && !isApp && deleteTargetId !== null && !showPageCapture,
-    showFlows: sessionsMode && !isApp && flowCount > 0,
+      sessionsMode && !showPageCapture && flowCount === 0 && !loading && deleteTargetId === null,
+    showDeletePlaceholder: sessionsMode && deleteTargetId !== null && !showPageCapture,
+    showFlows: sessionsMode && flowCount > 0,
   };
 }
 

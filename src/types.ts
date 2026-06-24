@@ -101,16 +101,6 @@ export interface Page {
   interceptReportingEnabled: boolean;
 }
 
-export interface AppEntry {
-  id: string;
-  name: string;
-  bundle: string;
-  path: string;
-  mode: string;
-  letter: string;
-  color: string;
-}
-
 export interface InterceptedFetch {
   id: string;
   page_id?: string;
@@ -135,7 +125,5 @@ export interface InterceptedFetch {
 export interface AppData {
   defaultSel: string;
   pages: Page[];
-  apps: AppEntry[];
 }
-
 

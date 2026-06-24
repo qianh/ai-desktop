@@ -24,7 +24,6 @@ import {
   type InterceptsQueryOptions,
 } from "./lib/conversationRecordsQuery";
 import type {
-  AppEntry,
   Flow,
   FlowType,
   Header,
@@ -56,14 +55,6 @@ export interface ApiPage {
   url: string;
   status: string;
   intercept_reporting_enabled: boolean;
-}
-
-export interface ApiApp {
-  id?: string | null;
-  name: string;
-  bundle_id: string;
-  app_path: string;
-  icon_path?: string | null;
 }
 
 export interface ApiSession {
@@ -166,22 +157,6 @@ export function mapApiPage(page: ApiPage): Page {
   };
 }
 
-export function mapApiApp(app: ApiApp, id: string): AppEntry {
-  return {
-    id,
-    name: app.name,
-    bundle: app.bundle_id,
-    path: app.app_path,
-    mode: "normal",
-    letter: pageLetter(app.name),
-    color: pageColor(app.bundle_id),
-  };
-}
-
-export async function scanInstalledApps(): Promise<ApiApp[]> {
-  return call<ApiApp[]>("scan_installed_apps");
-}
-
 export async function savePage(name: string | undefined, url: string): Promise<ApiPage> {
   return call<ApiPage>("save_page", { name: name ?? null, url });
 }
@@ -199,26 +174,6 @@ export async function setPageInterceptReporting(
 
 export async function removePage(pageId: string): Promise<void> {
   await call<void>("remove_page", { pageId });
-}
-
-export async function saveApp(app: ApiApp): Promise<ApiApp> {
-  return call<ApiApp>("save_app", {
-    name: app.name,
-    bundleId: app.bundle_id,
-    appPath: app.app_path,
-  });
-}
-
-export async function listApps(): Promise<ApiApp[]> {
-  return call<ApiApp[]>("list_apps");
-}
-
-export async function launchApp(appId: string): Promise<void> {
-  await call<void>("launch_app_command", { appId });
-}
-
-export async function removeApp(appId: string): Promise<void> {
-  await call<void>("remove_app", { appId });
 }
 
 export async function openPageWithCapture(pageId: string): Promise<ApiSession> {

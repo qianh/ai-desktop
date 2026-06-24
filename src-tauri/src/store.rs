@@ -1,4 +1,4 @@
-use crate::models::{AppEntry, Flow, FlowDetail, FlowListItem, HeaderPair, Page, Session};
+use crate::models::{Flow, FlowDetail, FlowListItem, HeaderPair, Page, Session};
 use crate::paths::AppScopePaths;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
@@ -51,16 +51,6 @@ impl FlowStore {
                     profile_id TEXT,
                     capture_mode TEXT NOT NULL DEFAULT 'chrome_session',
                     intercept_reporting_enabled INTEGER NOT NULL DEFAULT 0,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS apps (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    bundle_id TEXT NOT NULL,
-                    app_path TEXT NOT NULL,
-                    icon_path TEXT,
-                    launch_mode TEXT NOT NULL DEFAULT 'normal',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -221,58 +211,6 @@ impl FlowStore {
             .map_err(|e| e.to_string())?;
         self.conn
             .execute("DELETE FROM pages WHERE id = ?1", params![page_id])
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-
-    pub fn save_app(&self, app: &AppEntry) -> Result<(), String> {
-        self.conn
-            .execute(
-                "INSERT OR REPLACE INTO apps (id, name, bundle_id, app_path, icon_path, launch_mode, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                params![
-                    app.id,
-                    app.name,
-                    app.bundle_id,
-                    app.app_path,
-                    app.icon_path,
-                    app.launch_mode,
-                    app.created_at.to_rfc3339(),
-                    app.updated_at.to_rfc3339(),
-                ],
-            )
-            .map_err(|e| e.to_string())?;
-        Ok(())
-    }
-
-    pub fn list_apps(&self) -> Result<Vec<AppEntry>, String> {
-        let mut stmt = self
-            .conn
-            .prepare(
-                "SELECT id, name, bundle_id, app_path, icon_path, launch_mode, created_at, updated_at FROM apps ORDER BY name",
-            )
-            .map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map([], |row| {
-                Ok(AppEntry {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    bundle_id: row.get(2)?,
-                    app_path: row.get(3)?,
-                    icon_path: row.get(4)?,
-                    launch_mode: row.get(5)?,
-                    created_at: parse_ts(row.get::<_, String>(6)?),
-                    updated_at: parse_ts(row.get::<_, String>(7)?),
-                })
-            })
-            .map_err(|e| e.to_string())?;
-        rows.collect::<Result<Vec<_>, _>>()
-            .map_err(|e| e.to_string())
-    }
-
-    pub fn delete_app(&self, app_id: &str) -> Result<(), String> {
-        self.conn
-            .execute("DELETE FROM apps WHERE id = ?1", params![app_id])
             .map_err(|e| e.to_string())?;
         Ok(())
     }

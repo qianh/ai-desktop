@@ -1,4 +1,4 @@
-import type { AppEntry, Flow, InterceptedFetch, Page } from "../types";
+import type { Flow, InterceptedFetch, Page } from "../types";
 import { isDefaultChatPage } from "../lib/ensureDefaultPage";
 import { derivePagePanelState, deriveWorkspaceChrome } from "../lib/pagePanelState";
 import type { NavMode } from "../lib/pagePanelState";
@@ -6,7 +6,6 @@ import PageBrowser from "./PageBrowser";
 import SessionRecordsView from "./SessionRecordsView";
 import FlowTable from "./FlowTable";
 import EmptyState from "./EmptyState";
-import AppDetail from "./AppDetail";
 import InterceptPanel from "./InterceptPanel";
 
 export type PageSessionMeta = {
@@ -18,9 +17,7 @@ export type PageSessionMeta = {
 type Props = {
   navMode: NavMode;
   activeId: string;
-  isApp: boolean;
   pages: Page[];
-  active: Page | AppEntry | undefined;
   sessionMetaByPage: Record<string, PageSessionMeta>;
   flowsByPage: Record<string, Flow[]>;
   flows: Flow[];
@@ -36,7 +33,6 @@ type Props = {
   selectedFlowId: string | null;
   recording: boolean;
   captureBusy: boolean;
-  launchMode: string;
   onToggleInspector: () => void;
   onSelectFlow: (flowId: string) => void;
   onQuery: (v: string) => void;
@@ -44,8 +40,6 @@ type Props = {
   onToggleRecord: () => void;
   onClearFlows: () => void;
   onStartCapture: (pageId: string) => void;
-  onLaunchMode: (mode: string) => void;
-  onLaunchApp: (appId: string) => void;
 };
 
 const LAYER = {
@@ -58,7 +52,6 @@ export default function SessionsWorkspace(p: Props) {
   const hasActiveSession = !!p.sessionMetaByPage[p.activeId];
   const chrome = deriveWorkspaceChrome({
     navMode: p.navMode,
-    isApp: p.isApp,
     hasActiveSession,
     deleteTargetId: p.deleteTargetId,
     flowCount: p.flows.length,
@@ -111,7 +104,6 @@ export default function SessionsWorkspace(p: Props) {
                 navMode: p.navMode,
                 activeId: p.activeId,
                 pageId,
-                isActiveSelectionApp: p.isApp,
                 hasSessionForPage: true,
                 deleteTargetId: p.deleteTargetId,
                 overlayOpen: p.overlayOpen,
@@ -165,26 +157,6 @@ export default function SessionsWorkspace(p: Props) {
         <SessionRecordsView pages={p.pages} />
       </div>
 
-      {chrome.showApp && p.active && "bundle" in p.active && (
-        <div
-          style={{
-            position: "relative",
-            zIndex: LAYER.transient,
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <AppDetail
-            app={p.active}
-            launchMode={p.launchMode}
-            onLaunchMode={p.onLaunchMode}
-            onLaunch={() => p.onLaunchApp(p.active!.id)}
-          />
-        </div>
-      )}
-
       {chrome.showDeletePlaceholder && (
         <div
           style={{
@@ -221,7 +193,7 @@ export default function SessionsWorkspace(p: Props) {
         </div>
       )}
 
-      {p.navMode === "sessions" && !p.isApp && p.pages.length === 0 && !p.loading && (
+      {p.navMode === "sessions" && p.pages.length === 0 && !p.loading && (
         <div
           style={{
             flex: 1,

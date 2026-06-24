@@ -15,18 +15,6 @@ pub struct Page {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct AppEntry {
-    pub id: String,
-    pub name: String,
-    pub bundle_id: String,
-    pub app_path: String,
-    pub icon_path: Option<String>,
-    pub launch_mode: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Session {
     pub id: String,
     pub target_type: String,

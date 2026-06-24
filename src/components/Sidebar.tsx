@@ -1,6 +1,6 @@
-// Left sidebar — search, Chat, session records, Pages, Apps, Certificates, Settings.
+// Left sidebar — search, Chat, session records, Pages, Certificates, Settings.
 import type { CSSProperties } from "react";
-import type { AppEntry, Page } from "../types";
+import type { Page } from "../types";
 import {
   DEFAULT_PAGE_DISPLAY_NAME,
   isDefaultChatPage,
@@ -168,7 +168,6 @@ function ReportingToggle({ pageId, enabled, compact, onToggle }: ReportingToggle
 
 type Props = {
   pages: Page[];
-  apps: AppEntry[];
   navMode: string;
   activeId: string;
   query: string;
@@ -178,9 +177,7 @@ type Props = {
   onSelect: (id: string) => void;
   onDeletePage: (id: string) => void | Promise<void>;
   onToggleInterceptReporting: (pageId: string, enabled: boolean) => void | Promise<void>;
-  onDeleteApp: (id: string) => void | Promise<void>;
   onAddPage: () => void;
-  onAddApp: () => void;
   onCerts: () => void;
   onSettings: () => void;
   onOpenSessionRecords: () => void;
@@ -274,16 +271,6 @@ export default function Sidebar(p: Props) {
             </div>
           );
         })}
-        {p.apps.map((a) => (
-          <button
-            key={a.id}
-            onClick={() => p.onSelect(a.id)}
-            title={a.name}
-            style={{ ...collapsedIconBtn(rowSelected(a.id)), color: a.color || "#5a5a5e" }}
-          >
-            {a.letter}
-          </button>
-        ))}
         <div style={{ flex: 1 }} />
         <button onClick={p.onCerts} title="Certificates" style={{ ...collapseToggle, marginBottom: 2 }}>
           🛡
@@ -432,45 +419,6 @@ export default function Sidebar(p: Props) {
           );
         })}
 
-        <div style={{ ...sectionHeader, paddingTop: 14 }}>
-          <span style={sectionLabel}>Apps</span>
-          <button onClick={p.onAddApp} title="Add App" style={addBtn}>
-            +
-          </button>
-        </div>
-        {p.apps.map((a) => {
-          const sel = rowSelected(a.id);
-          return (
-            <div
-              key={a.id}
-              className={listRowClass(sel)}
-              style={listRowStyle("hidden")}
-            >
-              <button onClick={() => p.onSelect(a.id)} style={itemBtn}>
-                <span style={iconStyle(a.color)}>{a.letter}</span>
-                <span style={{ flex: 1, textAlign: "left", minWidth: 0, overflow: "hidden" }}>
-                  <span style={{ display: "block", fontSize: 12.5, fontWeight: 500, color: "#1d1d1f", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {a.name}
-                  </span>
-                  <span style={{ display: "block", fontSize: 11, color: "#9a9aa0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.mode}</span>
-                </span>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  p.onDeleteApp(a.id);
-                }}
-                title="Delete App"
-                aria-label={`Delete ${a.name}`}
-                className="asc-sidebar-row__delete"
-                style={deleteBtn}
-              >
-                ×
-              </button>
-            </div>
-          );
-        })}
       </div>
 
       {/* footer nav */}

@@ -1,15 +1,14 @@
 //! Tauri command surface (spec §13).
 
-use crate::apps::{launch_app, scan_installed_apps as scan_apps};
-use crate::default_page::is_default_chat_page;
 use crate::cert::{
     generate_certificate as generate_ca, get_certificate_status as ca_status,
     install_certificate as install_ca, open_certificate_guide as open_ca_guide,
     remove_certificate as remove_ca,
 };
 use crate::chrome::validate_url;
+use crate::default_page::is_default_chat_page;
 use crate::export::write_session_export;
-use crate::models::{AppEntry, Page, Session};
+use crate::models::{Page, Session};
 use crate::paths::AppScopePaths;
 use crate::proxy::{start_proxy, sync_event_file, ProxyRuntime};
 use crate::store::FlowStore;
@@ -18,15 +17,6 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use uuid::Uuid;
-
-#[derive(Serialize)]
-pub struct AppInfo {
-    pub id: Option<String>,
-    pub name: String,
-    pub bundle_id: String,
-    pub app_path: String,
-    pub icon_path: Option<String>,
-}
 
 #[derive(Debug, Serialize)]
 pub struct SessionInfo {
@@ -83,38 +73,11 @@ where
     f(&mut guard)
 }
 
-fn app_to_info(app: &AppEntry) -> AppInfo {
-    AppInfo {
-        id: Some(app.id.clone()),
-        name: app.name.clone(),
-        bundle_id: app.bundle_id.clone(),
-        app_path: app.app_path.clone(),
-        icon_path: app.icon_path.clone(),
-    }
-}
-
-fn scanned_app_to_info(app: &AppEntry) -> AppInfo {
-    AppInfo {
-        id: None,
-        name: app.name.clone(),
-        bundle_id: app.bundle_id.clone(),
-        app_path: app.app_path.clone(),
-        icon_path: app.icon_path.clone(),
-    }
-}
-
 fn page_display_name(url: &str) -> String {
     validate_url(url)
         .ok()
         .and_then(|u| u.host_str().map(|h| h.to_string()))
         .unwrap_or_else(|| url.to_string())
-}
-
-/// §13.1 — enumerate installed `.app` bundles.
-#[tauri::command]
-pub fn scan_installed_apps() -> Result<Vec<AppInfo>, String> {
-    let cache_dir = AppScopePaths::from_default().icon_cache_dir();
-    scan_apps(&cache_dir).map(|apps| apps.iter().map(scanned_app_to_info).collect())
 }
 
 #[tauri::command]
@@ -209,56 +172,6 @@ pub fn remove_page(page_id: String) -> Result<(), String> {
         }
 
         state.store.delete_page(&page_id)
-    })
-}
-
-#[tauri::command]
-pub fn save_app(name: String, bundle_id: String, app_path: String) -> Result<AppInfo, String> {
-    let now = Utc::now();
-    let app = AppEntry {
-        id: Uuid::new_v4().to_string(),
-        name,
-        bundle_id,
-        app_path: app_path.clone(),
-        icon_path: None,
-        launch_mode: "normal".into(),
-        created_at: now,
-        updated_at: now,
-    };
-    with_state(|state| {
-        state.store.save_app(&app)?;
-        Ok(app_to_info(&app))
-    })
-}
-
-#[tauri::command]
-pub fn list_apps() -> Result<Vec<AppInfo>, String> {
-    with_state(|state| {
-        let apps = state.store.list_apps()?;
-        Ok(apps.iter().map(app_to_info).collect())
-    })
-}
-
-#[tauri::command]
-pub fn launch_app_command(app_id: String) -> Result<(), String> {
-    with_state(|state| {
-        let apps = state.store.list_apps()?;
-        let app = apps
-            .into_iter()
-            .find(|a| a.id == app_id)
-            .ok_or_else(|| "app not found".to_string())?;
-        launch_app(&app.app_path)
-    })
-}
-
-#[tauri::command]
-pub fn remove_app(app_id: String) -> Result<(), String> {
-    with_state(|state| {
-        let apps = state.store.list_apps()?;
-        apps.into_iter()
-            .find(|a| a.id == app_id)
-            .ok_or_else(|| "app not found".to_string())?;
-        state.store.delete_app(&app_id)
     })
 }
 

@@ -209,10 +209,5 @@ export function buildAppData(): AppData {
       { id: "admin", name: "Admin Dashboard", host: "admin.acme.so", status: "idle", letter: "A", color: "#b26b00", flows: [], interceptReportingEnabled: false },
       { id: "local", name: "localhost:3000", host: "Vite dev server", status: "capturing", letter: "L", color: "#30a14e", flows: local, interceptReportingEnabled: false },
     ],
-    apps: [
-      { id: "chrome", name: "Google Chrome", bundle: "com.google.Chrome", path: "/Applications/Google Chrome.app", mode: "Normal launch", letter: "C", color: "#5b6470" },
-      { id: "slack", name: "Slack", bundle: "com.tinyspeck.slackmacgap", path: "/Applications/Slack.app", mode: "System Proxy", letter: "S", color: "#7a5af0" },
-      { id: "code", name: "Visual Studio Code", bundle: "com.microsoft.VSCode", path: "/Applications/Visual Studio Code.app", mode: "Normal launch", letter: "V", color: "#1e66d0" },
-    ],
   };
 }
