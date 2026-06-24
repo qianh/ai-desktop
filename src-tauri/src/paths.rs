@@ -42,6 +42,10 @@ impl AppScopePaths {
         self.root.join("proxy-events")
     }
 
+    pub fn icon_cache_dir(&self) -> PathBuf {
+        self.root.join("icon-cache")
+    }
+
     pub fn ensure_dirs(&self) -> std::io::Result<()> {
         for dir in [
             &self.root,
@@ -50,6 +54,7 @@ impl AppScopePaths {
             &self.exports_dir(),
             &self.logs_dir(),
             &self.proxy_events_dir(),
+            &self.icon_cache_dir(),
         ] {
             std::fs::create_dir_all(dir)?;
         }

@@ -57,7 +57,17 @@ export default function AddAppModal({ onClose, onSave }: Props) {
                 background: selected?.bundle_id === app.bundle_id ? "#f0f4ff" : "transparent",
               }}
             >
-              <span style={iconStyle("#5b6470")}>{letter(app.name)}</span>
+              {app.icon_path ? (
+                <img
+                  src={app.icon_path}
+                  alt=""
+                  width={24}
+                  height={24}
+                  style={{ width: 24, height: 24, borderRadius: 6, flex: "none", objectFit: "contain" }}
+                />
+              ) : (
+                <span style={iconStyle("#5b6470")}>{letter(app.name)}</span>
+              )}
               <span style={{ flex: 1, fontSize: 13, color: "#1d1d1f" }}>{app.name}</span>
               <span style={{ font: "11px ui-monospace,Menlo,monospace", color: "#a0a0a6", fontFamily: MONO }}>{app.bundle_id}</span>
             </div>

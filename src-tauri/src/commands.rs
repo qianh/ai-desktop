@@ -113,7 +113,8 @@ fn page_display_name(url: &str) -> String {
 /// §13.1 — enumerate installed `.app` bundles.
 #[tauri::command]
 pub fn scan_installed_apps() -> Result<Vec<AppInfo>, String> {
-    scan_apps().map(|apps| apps.iter().map(scanned_app_to_info).collect())
+    let cache_dir = AppScopePaths::from_default().icon_cache_dir();
+    scan_apps(&cache_dir).map(|apps| apps.iter().map(scanned_app_to_info).collect())
 }
 
 #[tauri::command]
