@@ -25,7 +25,7 @@ export default function EmptyState({ onOpenCapture, busy = false }: Props) {
           width: 60,
           height: 60,
           borderRadius: 15,
-          border: "2px dashed #d4d4d8",
+          border: "2px dashed var(--c-border-3)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",

@@ -31,6 +31,8 @@ export default function StatusBar({
 }: Props) {
   return (
     <div
+      className="asc-glass-chrome"
+      data-asc-region="statusbar"
       style={{
         height: 25,
         flex: "none",

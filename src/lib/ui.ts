@@ -14,8 +14,9 @@ export const primaryBtn: CSSProperties = {
   fontWeight: 500,
   color: "#fff",
   background: ACCENT,
-  borderRadius: 8,
+  borderRadius: "var(--c-radius, 8px)",
   padding: "8px 16px",
+  boxShadow: "var(--c-elevate, none)",
 };
 
 export const secondaryBtn: CSSProperties = {
@@ -26,8 +27,9 @@ export const secondaryBtn: CSSProperties = {
   color: "var(--c-text)",
   background: "var(--c-bg)",
   border: "1px solid var(--c-border-2)",
-  borderRadius: 8,
+  borderRadius: "var(--c-radius, 8px)",
   padding: "8px 15px",
+  boxShadow: "var(--c-elevate, none)",
 };
 
 export const dangerBtn: CSSProperties = {
@@ -59,7 +61,8 @@ export function iconStyle(color: string): CSSProperties {
   };
 }
 
-export type ThemeMode = "light" | "dark" | "system";
+export type { StylePreset, ThemeMode } from "./appearance";
+export { STYLE_PRESETS } from "./appearance";
 
 /** macOS-style segmented control button */
 export function segStyle(on: boolean): CSSProperties {

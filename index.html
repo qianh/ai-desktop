@@ -6,9 +6,16 @@
     <title>AppScope</title>
     <script>
       (function(){
+        /* Keep in sync with STYLE_PRESET_IDS in src/lib/appearance.ts */
+        var styles = ['classic','minimal','editorial','obsidian','glass'];
+        var s = localStorage.getItem('appscope-style') || 'classic';
+        if (styles.indexOf(s) === -1) s = 'classic';
+        var themes = ['light','dark','system'];
         var t = localStorage.getItem('theme') || 'system';
+        if (themes.indexOf(t) === -1) t = 'system';
         var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-        if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.setAttribute('data-style', s);
+        document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
       })();
     </script>
   </head>

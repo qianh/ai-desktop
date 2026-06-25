@@ -29,7 +29,15 @@ import CertManager from "./components/CertManager";
 import SessionsWorkspace from "./components/SessionsWorkspace";
 
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
-import { type ThemeMode } from "./lib/ui";
+import {
+  applyAppearance,
+  loadStylePreset,
+  loadThemeMode,
+  saveStylePreset,
+  saveThemeMode,
+  type StylePreset,
+  type ThemeMode,
+} from "./lib/appearance";
 import {
   DEFAULT_PAGE_DISPLAY_NAME,
   ensureChatInterceptReporting,
@@ -70,9 +78,8 @@ export default function App() {
   const [clear, setClear] = useState<Record<string, boolean>>({});
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null);
   const [toggles, setToggles] = useState<Toggles>({ mask: true, quic: true, login: false, autoclean: true });
-  const [theme, setTheme] = useState<ThemeMode>(
-    () => (localStorage.getItem("theme") as ThemeMode) ?? "system"
-  );
+  const [theme, setTheme] = useState<ThemeMode>(() => loadThemeMode());
+  const [stylePreset, setStylePreset] = useState<StylePreset>(() => loadStylePreset());
   const [certState, setCertState] = useState("NotGenerated");
   const [captureBusy, setCaptureBusy] = useState(false);
   const captureInFlight = useRef<Set<string>>(new Set());
@@ -83,22 +90,22 @@ export default function App() {
 
   const changeTheme = (t: ThemeMode) => {
     setTheme(t);
-    localStorage.setItem("theme", t);
+    saveThemeMode(t);
+  };
+
+  const changeStylePreset = (style: StylePreset) => {
+    setStylePreset(style);
+    saveStylePreset(style);
   };
 
   useEffect(() => {
-    const apply = (dark: boolean) => {
-      if (dark) document.documentElement.setAttribute("data-theme", "dark");
-      else document.documentElement.removeAttribute("data-theme");
-    };
-    if (theme === "dark") { apply(true); return; }
-    if (theme === "light") { apply(false); return; }
+    applyAppearance(stylePreset, theme);
+    if (theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    apply(mq.matches);
-    const handler = (e: MediaQueryListEvent) => apply(e.matches);
+    const handler = () => applyAppearance(stylePreset, "system");
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, [theme]);
+  }, [stylePreset, theme]);
 
   const refreshPages = useCallback(async () => {
     const apiPages = await listPages();
@@ -541,16 +548,18 @@ export default function App() {
 
   return (
     <div
+      className="asc-app-root"
       style={{
         height: "100vh",
         width: "100%",
         boxSizing: "border-box",
         display: "flex",
         background: "var(--c-bg)",
-        fontFamily: "-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,sans-serif",
+        fontFamily: "var(--font-sans)",
       }}
     >
       <div
+        className="asc-app-shell"
         style={{
           flex: 1,
           minWidth: 0,
@@ -570,7 +579,7 @@ export default function App() {
           sessionRecordsActive={recordsMode}
         />
 
-        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        <div className="asc-workspace" style={{ flex: 1, display: "flex", minHeight: 0 }}>
           <Sidebar
             pages={enrichedPages}
             navMode={navMode}
@@ -587,7 +596,10 @@ export default function App() {
             onSettings={() => setNavMode("settings")}
           />
 
-          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--c-bg)" }}>
+          <div
+            className="asc-content-panel"
+            style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--c-bg)" }}
+          >
             {navMode === "certs" && (
               <CertManager
                 state={certState}
@@ -627,7 +639,16 @@ export default function App() {
                 onRefresh={refreshCert}
               />
             )}
-            {navMode === "settings" && <Settings toggles={toggles} onToggle={toggle} theme={theme} onTheme={changeTheme} />}
+            {navMode === "settings" && (
+              <Settings
+                toggles={toggles}
+                onToggle={toggle}
+                theme={theme}
+                onTheme={changeTheme}
+                stylePreset={stylePreset}
+                onStylePreset={changeStylePreset}
+              />
+            )}
             {(sessionsMode || recordsMode) && (
               <SessionsWorkspace
                 navMode={navMode}

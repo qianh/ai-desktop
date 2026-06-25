@@ -28,6 +28,8 @@ export default function TitleBar({
 }) {
   return (
     <div
+      className="asc-glass-chrome"
+      data-asc-region="titlebar"
       style={{
         height: 39,
         flex: "none",
@@ -52,11 +54,19 @@ export default function TitleBar({
           💬 会话记录
         </button>
         <span style={{ fontSize: 11, color: "var(--c-text-4)" }}>布局</span>
-        <div style={{ display: "flex", background: "var(--c-border-2)", borderRadius: 7, padding: 2, gap: 2 }}>
-          <button onClick={() => onVariant("A")} style={segStyle(variant === "A")}>
+        <div className="asc-segment-track" style={{ display: "flex", background: "var(--c-border-2)", borderRadius: 7, padding: 2, gap: 2 }}>
+          <button
+            className={variant === "A" ? "asc-segment-btn--on" : undefined}
+            onClick={() => onVariant("A")}
+            style={segStyle(variant === "A")}
+          >
             A · 检查器
           </button>
-          <button onClick={() => onVariant("B")} style={segStyle(variant === "B")}>
+          <button
+            className={variant === "B" ? "asc-segment-btn--on" : undefined}
+            onClick={() => onVariant("B")}
+            style={segStyle(variant === "B")}
+          >
             B · DevTools
           </button>
         </div>
