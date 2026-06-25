@@ -1,8 +1,10 @@
 export type StylePreset = "classic" | "minimal" | "editorial" | "obsidian" | "glass";
 export type ThemeMode = "light" | "dark" | "system";
+export type GlassIntensity = "solid" | "soft" | "liquid";
 
 export const STYLE_STORAGE_KEY = "appscope-style";
 export const THEME_STORAGE_KEY = "theme";
+export const GLASS_STORAGE_KEY = "appscope-glass";
 
 export type StylePreviewPalette = {
   bg: string;
@@ -52,9 +54,21 @@ export const STYLE_PRESETS: StylePresetMeta[] = [
   {
     id: "glass",
     label: "玻璃液态",
-    desc: "Apple Liquid Glass · 导航层折射内容",
-    light: { bg: "#ffffff", surface: "rgba(255,255,255,0.2)", accent: "#007aff", border: "rgba(255,255,255,0.75)", line: "rgba(0,0,0,0.08)" },
-    dark: { bg: "#1c1c1e", surface: "rgba(44,44,48,0.22)", accent: "#0a84ff", border: "rgba(255,255,255,0.12)", line: "rgba(255,255,255,0.1)" },
+    desc: "Liquid Glass · 模糊折射 · 动态高光",
+    light: {
+      bg: "rgba(246,247,250,0.72)",
+      surface: "rgba(255,255,255,0.34)",
+      accent: "#0071e3",
+      border: "rgba(255,255,255,0.46)",
+      line: "rgba(17,20,28,0.12)",
+    },
+    dark: {
+      bg: "rgba(15,17,22,0.74)",
+      surface: "rgba(24,26,34,0.46)",
+      accent: "#0a84ff",
+      border: "rgba(255,255,255,0.13)",
+      line: "rgba(255,255,255,0.1)",
+    },
   },
 ];
 
@@ -62,6 +76,7 @@ export const STYLE_PRESETS: StylePresetMeta[] = [
 export const STYLE_PRESET_IDS: readonly StylePreset[] = STYLE_PRESETS.map((p) => p.id);
 
 const THEME_MODES: readonly ThemeMode[] = ["light", "dark", "system"];
+const GLASS_INTENSITIES: readonly GlassIntensity[] = ["solid", "soft", "liquid"];
 
 export function loadStylePreset(): StylePreset {
   const raw = localStorage.getItem(STYLE_STORAGE_KEY);
@@ -93,10 +108,60 @@ export function resolveThemeMode(mode: ThemeMode): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-export function applyAppearance(style: StylePreset, themeMode: ThemeMode): "light" | "dark" {
+export function loadGlassIntensity(): GlassIntensity {
+  const raw = localStorage.getItem(GLASS_STORAGE_KEY);
+  if (raw && (GLASS_INTENSITIES as readonly string[]).includes(raw)) {
+    return raw as GlassIntensity;
+  }
+  return "soft";
+}
+
+export function saveGlassIntensity(intensity: GlassIntensity): void {
+  localStorage.setItem(GLASS_STORAGE_KEY, intensity);
+}
+
+export function detectPlatform(): "macos" | "windows" | "linux" | "unknown" {
+  const ua = navigator.userAgent.toLowerCase();
+  if (ua.includes("mac")) return "macos";
+  if (ua.includes("win")) return "windows";
+  if (ua.includes("linux")) return "linux";
+  return "unknown";
+}
+
+export function autoDowngradeGlass(): GlassIntensity {
+  const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
+  const lowMemory = typeof memory === "number" && memory <= 4;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reducedTransparency = window.matchMedia("(prefers-reduced-transparency: reduce)").matches;
+
+  if (lowMemory || reducedMotion || reducedTransparency) {
+    return "solid";
+  }
+  return loadGlassIntensity();
+}
+
+export function applyGlassIntensity(intensity: GlassIntensity): void {
+  document.documentElement.setAttribute("data-glass", intensity);
+}
+
+export function applyPlatformClass(): void {
+  document.documentElement.setAttribute("data-platform", detectPlatform());
+}
+
+export function applyAppearance(
+  style: StylePreset,
+  themeMode: ThemeMode,
+  glassIntensity?: GlassIntensity,
+): "light" | "dark" {
   const resolved = resolveThemeMode(themeMode);
   const root = document.documentElement;
   root.setAttribute("data-style", style);
   root.setAttribute("data-theme", resolved);
+  applyPlatformClass();
+  if (style === "glass") {
+    applyGlassIntensity(glassIntensity ?? autoDowngradeGlass());
+  } else {
+    root.removeAttribute("data-glass");
+  }
   return resolved;
 }

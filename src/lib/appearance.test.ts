@@ -3,13 +3,17 @@ import { resolve } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   applyAppearance,
+  applyGlassIntensity,
+  loadGlassIntensity,
   loadStylePreset,
   loadThemeMode,
   resolveThemeMode,
+  saveGlassIntensity,
   saveStylePreset,
   saveThemeMode,
   STYLE_PRESET_IDS,
   STYLE_STORAGE_KEY,
+  GLASS_STORAGE_KEY,
   THEME_STORAGE_KEY,
 } from "./appearance";
 
@@ -108,6 +112,28 @@ describe("appearance", () => {
     expect(resolved).toBe("dark");
     expect(attrs["data-style"]).toBe("obsidian");
     expect(attrs["data-theme"]).toBe("dark");
+  });
+
+  it("applyAppearance sets data-glass for glass preset", () => {
+    saveGlassIntensity("liquid");
+    applyAppearance("glass", "light", "liquid");
+    expect(attrs["data-style"]).toBe("glass");
+    expect(attrs["data-glass"]).toBe("liquid");
+  });
+
+  it("loadGlassIntensity defaults to soft", () => {
+    expect(loadGlassIntensity()).toBe("soft");
+  });
+
+  it("saveGlassIntensity persists choice", () => {
+    saveGlassIntensity("solid");
+    expect(storage.getItem(GLASS_STORAGE_KEY)).toBe("solid");
+    expect(loadGlassIntensity()).toBe("solid");
+  });
+
+  it("applyGlassIntensity sets data-glass attribute", () => {
+    applyGlassIntensity("liquid");
+    expect(attrs["data-glass"]).toBe("liquid");
   });
 
   it("loadStylePreset accepts glass preset", () => {

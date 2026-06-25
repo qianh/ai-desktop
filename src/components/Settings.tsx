@@ -1,6 +1,6 @@
 // Settings view (§14 of the spec). Toggle state lives in App.
 import { useState, type KeyboardEvent } from "react";
-import type { StylePreset, StylePreviewPalette, ThemeMode } from "../lib/appearance";
+import type { GlassIntensity, StylePreset, StylePreviewPalette, ThemeMode } from "../lib/appearance";
 import { STYLE_PRESETS } from "../lib/appearance";
 import { segStyle } from "../lib/ui";
 import {
@@ -18,6 +18,7 @@ type Row =
   | { kind: "toggle"; label: string; desc?: string; key: keyof Toggles }
   | { kind: "value"; label: string; desc?: string; value: string }
   | { kind: "theme-segment"; label: string; desc?: string }
+  | { kind: "glass-segment"; label: string; desc?: string }
   | { kind: "style-picker"; label: string; desc?: string };
 
 const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
@@ -26,12 +27,19 @@ const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
   { value: "system", label: "System" },
 ];
 
+const GLASS_OPTIONS: { value: GlassIntensity; label: string }[] = [
+  { value: "solid", label: "实色" },
+  { value: "soft", label: "柔和" },
+  { value: "liquid", label: "液态" },
+];
+
 const SECTIONS: { title: string; rows: Row[] }[] = [
   {
     title: "General",
     rows: [
       { kind: "style-picker", label: "风格", desc: "五套视觉方案，各有 Light / Dark 配色" },
       { kind: "theme-segment", label: "明暗", desc: "System 跟随 macOS，作用于当前风格" },
+      { kind: "glass-segment", label: "玻璃强度", desc: "仅玻璃液态风格 · solid 强调可读性，liquid 更强折射感" },
       { kind: "toggle", label: "开机自启动", key: "login" },
     ],
   },
@@ -86,6 +94,30 @@ function Switch({ on, onClick }: { on: boolean; onClick: () => void }) {
         }}
       />
     </button>
+  );
+}
+
+function GlassSegment({ value, onChange }: { value: GlassIntensity; onChange: (g: GlassIntensity) => void }) {
+  return (
+    <div className="asc-segment-track" style={{ display: "flex", background: "var(--c-bg-3)", borderRadius: 8, padding: 3, gap: 2 }}>
+      {GLASS_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            className={active ? "asc-segment-btn--on" : undefined}
+            onClick={() => onChange(opt.value)}
+            style={{
+              ...segStyle(active),
+              border: active ? "1px solid var(--c-border)" : "1px solid transparent",
+              transition: "all 0.12s ease",
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -230,6 +262,8 @@ export default function Settings({
   onTheme,
   stylePreset,
   onStylePreset,
+  glassIntensity,
+  onGlassIntensity,
 }: {
   toggles: Toggles;
   onToggle: (k: keyof Toggles) => void;
@@ -237,6 +271,8 @@ export default function Settings({
   onTheme: (t: ThemeMode) => void;
   stylePreset: StylePreset;
   onStylePreset: (s: StylePreset) => void;
+  glassIntensity: GlassIntensity;
+  onGlassIntensity: (g: GlassIntensity) => void;
 }) {
   const [sbConfig, setSbConfig] = useState<SupabaseConfig>(loadSupabaseConfig);
 
@@ -263,6 +299,7 @@ export default function Settings({
       return <StylePresetPicker value={stylePreset} onChange={onStylePreset} />;
     }
     if (r.kind === "theme-segment") return <ThemeSegment value={theme} onChange={onTheme} />;
+    if (r.kind === "glass-segment") return <GlassSegment value={glassIntensity} onChange={onGlassIntensity} />;
     if (r.kind === "toggle") return <Switch on={toggles[r.key]} onClick={() => onToggle(r.key)} />;
     return (
       <span
@@ -314,7 +351,9 @@ export default function Settings({
                 boxShadow: "var(--c-elevate, none)",
               }}
             >
-              {sec.rows.map((r, i) => (
+              {sec.rows
+                .filter((r) => r.kind !== "glass-segment" || stylePreset === "glass")
+                .map((r, i, rows) => (
                 <div
                   key={i}
                   style={{
@@ -323,7 +362,7 @@ export default function Settings({
                     alignItems: isWideRow(r) ? "stretch" : "center",
                     gap: isWideRow(r) ? 10 : 12,
                     padding: isWideRow(r) ? "16px 16px 18px" : "12px 15px",
-                    borderBottom: i < sec.rows.length - 1 ? "1px solid var(--c-divider)" : undefined,
+                    borderBottom: i < rows.length - 1 ? "1px solid var(--c-divider)" : undefined,
                   }}
                 >
                   <div style={{ flex: isWideRow(r) ? undefined : 1, minWidth: 0 }}>

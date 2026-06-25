@@ -199,8 +199,9 @@ export default function Sidebar(p: Props) {
   if (p.collapsed) {
     return (
       <div
-        className="asc-glass-chrome"
+        className="asc-glass-chrome liquid-glass"
         data-asc-region="sidebar"
+        data-depth="2"
         style={{
           width: 40,
           flex: "none",
@@ -277,8 +278,9 @@ export default function Sidebar(p: Props) {
 
   return (
     <div
-      className="asc-glass-chrome"
+      className="asc-glass-chrome liquid-glass"
       data-asc-region="sidebar"
+      data-depth="2"
       style={{ width: 246, flex: "none", background: "var(--c-bg-3)", borderRight: "1px solid var(--c-border-2)", display: "flex", flexDirection: "column", minHeight: 0 }}
     >
       {/* search + collapse */}

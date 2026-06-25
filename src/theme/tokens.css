@@ -1,0 +1,148 @@
+/* Liquid Glass theme tokens — scoped to glass style preset */
+html[data-style="glass"] {
+  color-scheme: light dark;
+
+  --app-radius-sm: 10px;
+  --app-radius-md: 16px;
+  --app-radius-lg: 22px;
+  --app-radius-xl: 30px;
+  --app-radius-pill: 999px;
+
+  --glass-blur: 26px;
+  --glass-saturate: 1.65;
+  --glass-brightness: 1.04;
+
+  --glass-bg: rgba(255, 255, 255, 0.34);
+  --glass-bg-hover: rgba(255, 255, 255, 0.46);
+  --glass-bg-active: rgba(255, 255, 255, 0.58);
+  --glass-bg-strong: rgba(255, 255, 255, 0.68);
+
+  --glass-border: rgba(255, 255, 255, 0.46);
+  --glass-border-strong: rgba(255, 255, 255, 0.72);
+  --glass-highlight: rgba(255, 255, 255, 0.86);
+  --glass-shadow: rgba(0, 0, 0, 0.18);
+
+  --surface-base: rgba(246, 247, 250, 0.72);
+  --surface-elevated: rgba(255, 255, 255, 0.48);
+
+  --text-primary: rgba(17, 20, 28, 0.94);
+  --text-secondary: rgba(17, 20, 28, 0.64);
+  --text-tertiary: rgba(17, 20, 28, 0.42);
+
+  --accent: rgb(0, 113, 227);
+  --accent-soft: rgba(0, 113, 227, 0.18);
+  --danger: rgb(255, 59, 48);
+  --success: rgb(52, 199, 89);
+  --warning: rgb(255, 149, 0);
+
+  --duration-fast: 140ms;
+  --duration-normal: 240ms;
+  --duration-slow: 420ms;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+html[data-style="glass"][data-theme="light"] {
+  --font-display: var(--font-sans);
+  --c-text: var(--text-primary);
+  --c-text-2: var(--text-secondary);
+  --c-text-3: var(--text-tertiary);
+  --c-text-4: rgba(17, 20, 28, 0.52);
+  --c-bg: #ffffff;
+  --c-bg-2: rgba(255, 255, 255, 0.92);
+  --c-bg-3: var(--glass-bg);
+  --c-bg-4: var(--glass-bg-hover);
+  --c-divider: rgba(0, 0, 0, 0.06);
+  --c-border: rgba(0, 0, 0, 0.08);
+  --c-border-2: rgba(0, 0, 0, 0.1);
+  --c-border-3: rgba(0, 0, 0, 0.14);
+  --c-accent: var(--accent);
+  --c-accent-soft: var(--accent-soft);
+  --c-switch-off: rgba(0, 0, 0, 0.12);
+  --c-hover: rgba(0, 0, 0, 0.04);
+  --c-selected: rgba(0, 113, 227, 0.12);
+  --c-overlay: rgba(20, 20, 24, 0.34);
+  --c-titlebar-bg: var(--glass-bg);
+  --c-titlebar-border: var(--glass-border);
+  --c-header-bg: var(--c-bg-2);
+  --c-user-bubble-bg: #e8f0fe;
+  --c-user-bubble-border: #c5d9f8;
+  --c-radius: var(--app-radius-md);
+  --c-radius-lg: var(--app-radius-lg);
+  --c-elevate: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --c-body-bg:
+    radial-gradient(circle at 16% 18%, rgba(0, 113, 227, 0.18), transparent 28%),
+    radial-gradient(circle at 84% 20%, rgba(191, 90, 242, 0.14), transparent 30%),
+    radial-gradient(circle at 50% 90%, rgba(52, 199, 89, 0.1), transparent 34%),
+    var(--surface-base);
+  --c-chrome-bg: var(--glass-bg);
+  --c-chrome-border: var(--glass-border-strong);
+  --c-chrome-highlight:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1),
+    0 18px 56px var(--glass-shadow);
+  --c-blur: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+}
+
+html[data-style="glass"][data-theme="dark"] {
+  --glass-bg: rgba(24, 26, 34, 0.46);
+  --glass-bg-hover: rgba(34, 37, 48, 0.58);
+  --glass-bg-active: rgba(44, 48, 62, 0.7);
+  --glass-bg-strong: rgba(38, 42, 54, 0.78);
+
+  --glass-border: rgba(255, 255, 255, 0.13);
+  --glass-border-strong: rgba(255, 255, 255, 0.24);
+  --glass-highlight: rgba(255, 255, 255, 0.28);
+  --glass-shadow: rgba(0, 0, 0, 0.46);
+
+  --surface-base: rgba(15, 17, 22, 0.74);
+  --surface-elevated: rgba(28, 30, 38, 0.58);
+
+  --text-primary: rgba(255, 255, 255, 0.94);
+  --text-secondary: rgba(255, 255, 255, 0.66);
+  --text-tertiary: rgba(255, 255, 255, 0.42);
+
+  --accent: rgb(10, 132, 255);
+  --accent-soft: rgba(10, 132, 255, 0.2);
+
+  --font-display: var(--font-sans);
+  --c-text: var(--text-primary);
+  --c-text-2: var(--text-secondary);
+  --c-text-3: var(--text-tertiary);
+  --c-text-4: rgba(255, 255, 255, 0.48);
+  --c-bg: #1c1c1e;
+  --c-bg-2: rgba(28, 30, 38, 0.92);
+  --c-bg-3: var(--glass-bg);
+  --c-bg-4: var(--glass-bg-hover);
+  --c-divider: rgba(255, 255, 255, 0.07);
+  --c-border: rgba(255, 255, 255, 0.1);
+  --c-border-2: rgba(255, 255, 255, 0.08);
+  --c-border-3: rgba(255, 255, 255, 0.14);
+  --c-accent: var(--accent);
+  --c-accent-soft: var(--accent-soft);
+  --c-switch-off: rgba(255, 255, 255, 0.16);
+  --c-hover: rgba(255, 255, 255, 0.06);
+  --c-selected: rgba(10, 132, 255, 0.18);
+  --c-overlay: rgba(0, 0, 0, 0.6);
+  --c-titlebar-bg: var(--glass-bg);
+  --c-titlebar-border: var(--glass-border);
+  --c-header-bg: var(--c-bg-2);
+  --c-user-bubble-bg: rgba(10, 132, 255, 0.12);
+  --c-user-bubble-border: rgba(10, 132, 255, 0.3);
+  --c-radius: var(--app-radius-md);
+  --c-radius-lg: var(--app-radius-lg);
+  --c-elevate: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  --c-body-bg:
+    radial-gradient(circle at 16% 18%, rgba(10, 132, 255, 0.16), transparent 28%),
+    radial-gradient(circle at 84% 20%, rgba(191, 90, 242, 0.12), transparent 30%),
+    radial-gradient(circle at 50% 90%, rgba(52, 199, 89, 0.08), transparent 34%),
+    var(--surface-base);
+  --c-chrome-bg: var(--glass-bg);
+  --c-chrome-border: var(--glass-border-strong);
+  --c-chrome-highlight:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 56px var(--glass-shadow);
+  --c-blur: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+}

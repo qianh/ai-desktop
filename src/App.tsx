@@ -29,12 +29,16 @@ import CertManager from "./components/CertManager";
 import SessionsWorkspace from "./components/SessionsWorkspace";
 
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
+import { bindLiquidPointer } from "./hooks/useLiquidPointer";
 import {
   applyAppearance,
+  loadGlassIntensity,
   loadStylePreset,
   loadThemeMode,
+  saveGlassIntensity,
   saveStylePreset,
   saveThemeMode,
+  type GlassIntensity,
   type StylePreset,
   type ThemeMode,
 } from "./lib/appearance";
@@ -80,6 +84,7 @@ export default function App() {
   const [toggles, setToggles] = useState<Toggles>({ mask: true, quic: true, login: false, autoclean: true });
   const [theme, setTheme] = useState<ThemeMode>(() => loadThemeMode());
   const [stylePreset, setStylePreset] = useState<StylePreset>(() => loadStylePreset());
+  const [glassIntensity, setGlassIntensity] = useState<GlassIntensity>(() => loadGlassIntensity());
   const [certState, setCertState] = useState("NotGenerated");
   const [captureBusy, setCaptureBusy] = useState(false);
   const captureInFlight = useRef<Set<string>>(new Set());
@@ -98,14 +103,24 @@ export default function App() {
     saveStylePreset(style);
   };
 
+  const changeGlassIntensity = (intensity: GlassIntensity) => {
+    setGlassIntensity(intensity);
+    saveGlassIntensity(intensity);
+  };
+
   useEffect(() => {
-    applyAppearance(stylePreset, theme);
+    applyAppearance(stylePreset, theme, glassIntensity);
     if (theme !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => applyAppearance(stylePreset, "system");
+    const handler = () => applyAppearance(stylePreset, "system", glassIntensity);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
-  }, [stylePreset, theme]);
+  }, [stylePreset, theme, glassIntensity]);
+
+  useEffect(() => {
+    if (stylePreset !== "glass") return;
+    return bindLiquidPointer();
+  }, [stylePreset]);
 
   const refreshPages = useCallback(async () => {
     const apiPages = await listPages();
@@ -647,6 +662,8 @@ export default function App() {
                 onTheme={changeTheme}
                 stylePreset={stylePreset}
                 onStylePreset={changeStylePreset}
+                glassIntensity={glassIntensity}
+                onGlassIntensity={changeGlassIntensity}
               />
             )}
             {(sessionsMode || recordsMode) && (

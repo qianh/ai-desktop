@@ -28,8 +28,9 @@ export default function TitleBar({
 }) {
   return (
     <div
-      className="asc-glass-chrome"
+      className="asc-glass-chrome liquid-glass"
       data-asc-region="titlebar"
+      data-depth="1"
       style={{
         height: 39,
         flex: "none",
