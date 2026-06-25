@@ -18,7 +18,7 @@ describe("Sidebar app feature removal", () => {
         onDeletePage: () => undefined,
         onToggleInterceptReporting: () => undefined,
         onAddPage: () => undefined,
-        onCerts: () => undefined,
+
         onSettings: () => undefined,
       }),
     );

@@ -1,3 +1,4 @@
+import type { RefObject } from "react";
 import type { Flow, InterceptedFetch, Page } from "../types";
 import { isDefaultChatPage } from "../lib/ensureDefaultPage";
 import { derivePagePanelState, deriveWorkspaceChrome } from "../lib/pagePanelState";
@@ -40,6 +41,7 @@ type Props = {
   onToggleRecord: () => void;
   onClearFlows: () => void;
   onStartCapture: (pageId: string) => void;
+  sidebarRef?: RefObject<HTMLElement | null>;
 };
 
 const LAYER = {
@@ -80,7 +82,7 @@ export default function SessionsWorkspace(p: Props) {
   };
 
   return (
-    <div style={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column" }}>
+    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--c-bg)" }}>
       {Object.keys(p.sessionMetaByPage).length > 0 && (
         <div
           style={{
@@ -88,6 +90,9 @@ export default function SessionsWorkspace(p: Props) {
             inset: 0,
             display: "flex",
             minWidth: 0,
+            minHeight: 0,
+            height: "100%",
+            alignItems: "stretch",
             zIndex: LAYER.capture,
           }}
         >
@@ -109,13 +114,12 @@ export default function SessionsWorkspace(p: Props) {
                 overlayOpen: p.overlayOpen,
               })}
               inspectorOpen={p.inspectorOpen}
-              onToggleInspector={p.onToggleInspector}
-              requestCount={(p.flowsByPage[pageId] || []).length}
+              sidebarRef={p.sidebarRef}
             />
           );
           })}
           {p.inspectorOpen && chrome.showPageCapture && (
-            <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: "58%", display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, background: "var(--c-bg)" }}>
               {chrome.showFlows ? (
                 <FlowTable {...flowTableProps} />
               ) : (

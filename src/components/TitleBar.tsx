@@ -1,4 +1,5 @@
 // macOS window title bar with traffic lights + A/B layout toggle.
+import { APP_TITLE_BAR_H } from "../lib/chromeLayout";
 import { segStyle } from "../lib/ui";
 
 const iconSegStyle = (active: boolean) => ({
@@ -28,11 +29,11 @@ export default function TitleBar({
 }) {
   return (
     <div
-      className="asc-glass-chrome liquid-glass"
+      className="asc-titlebar asc-glass-chrome liquid-glass"
       data-asc-region="titlebar"
       data-depth="1"
       style={{
-        height: 39,
+        height: APP_TITLE_BAR_H,
         flex: "none",
         display: "flex",
         alignItems: "center",
@@ -42,7 +43,10 @@ export default function TitleBar({
         borderBottom: "1px solid var(--c-titlebar-border)",
       }}
     >
-      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+      <div
+        data-tauri-drag-region
+        style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}
+      >
         <span style={{ fontSize: 13, fontWeight: 600, color: "var(--c-text)" }}>AppScope</span>
         <span style={{ fontSize: 12.5, color: "var(--c-text-4)" }}>— {titleSuffix}</span>
       </div>

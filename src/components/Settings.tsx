@@ -1,5 +1,6 @@
 // Settings view (§14 of the spec). Toggle state lives in App.
 import { useState, type KeyboardEvent } from "react";
+import CertManager from "./CertManager";
 import type { GlassIntensity, StylePreset, StylePreviewPalette, ThemeMode } from "../lib/appearance";
 import { STYLE_PRESETS } from "../lib/appearance";
 import { segStyle } from "../lib/ui";
@@ -255,6 +256,15 @@ function StylePresetPicker({
   );
 }
 
+type CertHandlers = {
+  state: string;
+  onInstall: () => void | Promise<void>;
+  onOpenGuide: () => void | Promise<void>;
+  onGenerate: () => void | Promise<void>;
+  onRemove: () => void | Promise<void>;
+  onRefresh: () => void | Promise<void>;
+};
+
 export default function Settings({
   toggles,
   onToggle,
@@ -264,6 +274,7 @@ export default function Settings({
   onStylePreset,
   glassIntensity,
   onGlassIntensity,
+  cert,
 }: {
   toggles: Toggles;
   onToggle: (k: keyof Toggles) => void;
@@ -273,6 +284,7 @@ export default function Settings({
   onStylePreset: (s: StylePreset) => void;
   glassIntensity: GlassIntensity;
   onGlassIntensity: (g: GlassIntensity) => void;
+  cert: CertHandlers;
 }) {
   const [sbConfig, setSbConfig] = useState<SupabaseConfig>(loadSupabaseConfig);
 
@@ -377,6 +389,40 @@ export default function Settings({
             </div>
           </div>
         ))}
+
+        <div style={{ marginBottom: 26 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: "var(--c-text-4)",
+              letterSpacing: ".05em",
+              textTransform: "uppercase",
+              marginBottom: 8,
+            }}
+          >
+            Certificates
+          </div>
+          <div
+            className="asc-settings-section"
+            style={{
+              border: "1px solid var(--c-border)",
+              borderRadius: "var(--c-radius-lg, 11px)",
+              overflow: "hidden",
+              boxShadow: "var(--c-elevate, none)",
+            }}
+          >
+            <CertManager
+              embedded
+              state={cert.state}
+              onInstall={cert.onInstall}
+              onOpenGuide={cert.onOpenGuide}
+              onGenerate={cert.onGenerate}
+              onRemove={cert.onRemove}
+              onRefresh={cert.onRefresh}
+            />
+          </div>
+        </div>
 
         <div style={{ marginBottom: 26 }}>
           <div

@@ -5,6 +5,51 @@ use tauri::webview::Color;
 
 const PAGE_WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 
+/// Must match src/lib/chromeLayout.ts APP_TITLE_BAR_H.
+pub const PAGE_WEBVIEW_TITLE_BAR_H: f64 = 39.0;
+/// Must match src/lib/chromeLayout.ts APP_STATUS_BAR_H.
+pub const PAGE_WEBVIEW_STATUS_BAR_H: f64 = 25.0;
+
+/// Derive child webview bounds from window client size + horizontal DOM anchors.
+pub fn page_webview_logical_bounds(
+    logical_w: f64,
+    logical_h: f64,
+    sidebar_right: f64,
+    panel_right: f64,
+) -> (f64, f64, f64, f64) {
+    let x = sidebar_right.max(0.0);
+    let y = PAGE_WEBVIEW_TITLE_BAR_H;
+    let right = panel_right.max(x + 1.0).min(logical_w);
+    let width = (right - x).max(1.0);
+    let height = (logical_h - PAGE_WEBVIEW_TITLE_BAR_H - PAGE_WEBVIEW_STATUS_BAR_H).max(1.0);
+    (x, y, width, height)
+}
+
+fn window_page_webview_bounds(
+    app: &AppHandle,
+    sidebar_right: f64,
+    panel_right: f64,
+) -> Result<(f64, f64, f64, f64), String> {
+    let window = app
+        .get_window("main")
+        .ok_or_else(|| "main window not found".to_string())?;
+    let main = app
+        .get_webview("main")
+        .ok_or_else(|| "main webview not found".to_string())?;
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let main_pos = main.position().map_err(|e| e.to_string())?;
+    let main_size = main.size().map_err(|e| e.to_string())?;
+    let base_x = main_pos.x as f64 / scale;
+    let base_y = main_pos.y as f64 / scale;
+    let logical_w = main_size.width as f64 / scale;
+    let logical_h = main_size.height as f64 / scale;
+    let (mut x, mut y, width, height) =
+        page_webview_logical_bounds(logical_w, logical_h, sidebar_right, panel_right);
+    x += base_x;
+    y += base_y;
+    Ok((x, y, width, height))
+}
+
 #[derive(Clone, serde::Serialize)]
 struct PageWebviewLoadEvent {
     page_id: String,
@@ -59,10 +104,8 @@ pub fn mount_page_webview(
     url: String,
     proxy_port: u16,
     intercept_reporting_enabled: bool,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
+    sidebar_right: f64,
+    panel_right: f64,
 ) -> Result<(), String> {
     let label = sanitize_webview_label(&page_id);
 
@@ -75,6 +118,8 @@ pub fn mount_page_webview(
     let window = app
         .get_window("main")
         .ok_or_else(|| "main window not found".to_string())?;
+
+    let (x, y, width, height) = window_page_webview_bounds(&app, sidebar_right, panel_right)?;
 
     let target = url::Url::parse(&url).map_err(|e| format!("invalid url: {e}"))?;
 
@@ -193,20 +238,19 @@ pub fn close_page_webview(app: AppHandle, page_id: String) -> Result<(), String>
 pub fn sync_page_webview_bounds(
     app: AppHandle,
     page_id: String,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
+    sidebar_right: f64,
+    panel_right: f64,
 ) -> Result<(), String> {
     let label = sanitize_webview_label(&page_id);
     let webview = app
         .get_webview(&label)
         .ok_or_else(|| "page webview not found".to_string())?;
+    let (x, y, width, height) = window_page_webview_bounds(&app, sidebar_right, panel_right)?;
     webview
         .set_position(LogicalPosition::new(x, y))
         .map_err(|e| e.to_string())?;
     webview
-        .set_size(LogicalSize::new(width.max(1.0), height.max(1.0)))
+        .set_size(LogicalSize::new(width, height))
         .map_err(|e| e.to_string())?;
     Ok(())
 }
@@ -425,6 +469,15 @@ mod tests {
         assert!(script.contains("/__appscope_intercept__"));
         assert!(script.contains("[binary body omitted]"));
         assert!(script.contains("test-page-id"));
+    }
+
+    #[test]
+    fn logical_bounds_fill_window_below_chrome() {
+        let (x, y, w, h) = super::page_webview_logical_bounds(1200.0, 860.0, 246.0, 1200.0);
+        assert_eq!(x, 246.0);
+        assert_eq!(y, 39.0);
+        assert_eq!(w, 954.0);
+        assert_eq!(h, 796.0);
     }
 
     #[test]

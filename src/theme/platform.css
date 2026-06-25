@@ -32,3 +32,8 @@ html[data-style="glass"][data-platform="linux"] {
   --glass-blur: 16px;
   --glass-saturate: 1.25;
 }
+
+/* Overlay title bar: leave room for macOS traffic lights */
+html[data-platform="macos"] .asc-titlebar {
+  padding-left: 78px;
+}

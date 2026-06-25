@@ -1,4 +1,6 @@
 // Bottom status bar — proxy / CA / QUIC state.
+import { APP_STATUS_BAR_H } from "../lib/chromeLayout";
+
 type Props = {
   statusLeft: string;
   live: boolean;
@@ -35,13 +37,13 @@ export default function StatusBar({
       data-asc-region="statusbar"
       data-depth="1"
       style={{
-        height: 25,
+        height: APP_STATUS_BAR_H,
         flex: "none",
         display: "flex",
         alignItems: "center",
         gap: 14,
         padding: "0 14px",
-        background: "var(--c-divider)",
+        background: "var(--c-bg-2)",
         borderTop: "1px solid var(--c-border-2)",
         font: "11px ui-monospace,'SF Mono',Menlo,monospace",
         color: "var(--c-text-3)",

@@ -556,11 +556,18 @@ html[data-style="editorial"] .asc-display-font {
 
 html, body, #root {
   height: 100%;
+  overflow: hidden;
 }
 
 body {
   margin: 0;
   font-family: var(--font-sans);
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 *::-webkit-scrollbar {

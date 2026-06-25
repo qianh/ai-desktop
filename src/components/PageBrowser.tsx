@@ -1,7 +1,7 @@
 // Embedded page webview — loads the capture target inside AppScope via a Rust-mounted child webview.
 // Webview is created on mount and closed on unmount. Visibility is toggled via show/hide
 // so switching pages does not reload.
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   closePageWebview,
@@ -13,6 +13,7 @@ import {
 } from "../api";
 import { isTauriRuntime } from "../api";
 import type { PagePanelState } from "../lib/pagePanelState";
+import { measurePageWebviewHorizontal } from "../lib/pageWebviewBounds";
 
 type Props = {
   pageId: string;
@@ -21,8 +22,7 @@ type Props = {
   interceptReportingEnabled: boolean;
   panelState: PagePanelState;
   inspectorOpen: boolean;
-  onToggleInspector: () => void;
-  requestCount: number;
+  sidebarRef?: RefObject<HTMLElement | null>;
 };
 
 type PageWebviewLoadEvent = {
@@ -34,6 +34,20 @@ type PageWebviewLoadEvent = {
 
 const LOAD_TIMEOUT_MS = 30_000;
 const URL_POLL_INTERVAL_MS = 1_500;
+const MOUNT_MEASURE_ATTEMPTS = 24;
+const BOUNDS_SYNC_DEBOUNCE_MS = 80;
+
+function logBoundsSyncError(context: string, err: unknown): void {
+  console.warn(`[PageBrowser] ${context}`, err);
+}
+
+function debounce<T extends (...args: never[]) => void>(fn: T, ms: number): T {
+  let timer: number | null = null;
+  return ((...args: never[]) => {
+    if (timer != null) window.clearTimeout(timer);
+    timer = window.setTimeout(() => fn(...args), ms);
+  }) as T;
+}
 
 async function waitForHostSize(host: HTMLElement, attempts = 40): Promise<DOMRect | null> {
   for (let i = 0; i < attempts; i += 1) {
@@ -68,25 +82,39 @@ export default function PageBrowser({
   interceptReportingEnabled,
   panelState,
   inspectorOpen,
-  onToggleInspector,
-  requestCount,
+  sidebarRef,
 }: Props) {
+  const panelRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const lastNavUrlRef = useRef(url);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [displayUrl, setDisplayUrl] = useState(url);
   const panelStateRef = useRef(panelState);
   panelStateRef.current = panelState;
 
   useEffect(() => {
     lastNavUrlRef.current = url;
-    setDisplayUrl(url);
   }, [pageId, url]);
 
   const layoutActive = panelState !== "hidden";
   const active = panelState === "visible";
+
+  const measureHorizontal = useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return null;
+    return measurePageWebviewHorizontal(panel, sidebarRef?.current);
+  }, [sidebarRef]);
+
+  const pushBounds = useCallback(() => {
+    const edges = measureHorizontal();
+    if (!edges) return;
+    void syncPageWebviewBounds(pageId, edges.sidebarRight, edges.panelRight).catch((err) =>
+      logBoundsSyncError("sync bounds", err),
+    );
+  }, [measureHorizontal, pageId]);
+
+  const debouncedPushBounds = useCallback(debounce(pushBounds, BOUNDS_SYNC_DEBOUNCE_MS), [pushBounds]);
 
   // Mount effect — create webview once, close only on component unmount
   useLayoutEffect(() => {
@@ -98,6 +126,7 @@ export default function PageBrowser({
 
     const host = hostRef.current;
     let resizeObserver: ResizeObserver | null = null;
+    let sidebarObserver: ResizeObserver | null = null;
     let unlistenLoad: (() => void) | null = null;
     let loadTimeout: number | null = null;
     let pollTimer: number | null = null;
@@ -144,15 +173,21 @@ export default function PageBrowser({
       clearLoadTimeout();
       loadTimeout = window.setTimeout(() => {
         failLoad(
-          "页面 WebView 已创建，但 30 秒内没有完成加载。若目标为 HTTPS，请先在 Certificates 中安装并信任本地 CA；也可能是目标站点阻止了 WKWebView。"
+          "页面 WebView 已创建，但 30 秒内没有完成加载。若目标为 HTTPS，请先在 Settings → Certificates 中安装并信任本地 CA；也可能是目标站点阻止了 WKWebView。",
         );
       }, LOAD_TIMEOUT_MS);
     };
 
+    const measureHost = () => {
+      const panel = panelRef.current;
+      if (!panel) return null;
+      return measurePageWebviewHorizontal(panel, sidebarRef?.current);
+    };
+
     const syncBounds = async () => {
-      const rect = host.getBoundingClientRect();
-      if (rect.width < 1 || rect.height < 1) return;
-      await syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height);
+      const edges = measureHost();
+      if (!edges) return;
+      await syncPageWebviewBounds(pageId, edges.sidebarRight, edges.panelRight);
     };
 
     const rememberNavUrl = (currentUrl: string | null | undefined) => {
@@ -160,7 +195,6 @@ export default function PageBrowser({
       const trimmed = currentUrl.trim();
       if (!trimmed || trimmed.toLowerCase() === "about:blank") return;
       lastNavUrlRef.current = trimmed;
-      setDisplayUrl(trimmed);
     };
 
     const pollWebviewUrl = async () => {
@@ -196,14 +230,18 @@ export default function PageBrowser({
       });
     };
 
-    const createWebview = async () => {
-      if (webviewMounted || cancelled) return;
+    const createWebview = async (): Promise<boolean> => {
+      if (webviewMounted || cancelled) return true;
 
-      const rect = host.getBoundingClientRect();
-      if (rect.width < 80 || rect.height < 120) return;
+      const edges = measureHost();
+      const panel = panelRef.current;
+      const panelRect = panel?.getBoundingClientRect();
+      if (!edges || !panelRect || panelRect.width < 80 || panelRect.height < 120) {
+        return false;
+      }
 
       await ensureListener();
-      if (cancelled) return;
+      if (cancelled) return false;
 
       setStatus("loading");
       setError(null);
@@ -215,14 +253,12 @@ export default function PageBrowser({
         mountUrl,
         proxyPort,
         interceptReportingEnabled,
-        rect.x,
-        rect.y,
-        rect.width,
-        rect.height,
+        edges.sidebarRight,
+        edges.panelRight,
       );
       if (cancelled) {
         await closePageWebview(pageId);
-        return;
+        return false;
       }
 
       webviewMounted = true;
@@ -242,25 +278,43 @@ export default function PageBrowser({
         }, URL_POLL_INTERVAL_MS);
       }
       void pollWebviewUrl();
+      return true;
+    };
+
+    const failMeasure = () => {
+      if (!sidebarRef?.current) {
+        failLoad("无法测量侧栏边界。请确认侧栏已展开后重试。");
+        return;
+      }
+      failLoad("无法测量页面面板边界。请调整窗口大小后重试。");
     };
 
     const boot = async () => {
       await ensureListener();
       if (cancelled) return;
 
-      const rect = await waitForHostSize(host);
+      const measureEl = hostRef.current ?? panelRef.current ?? host;
+      const rect = await waitForHostSize(measureEl);
       if (!rect || cancelled) {
         setStatus("error");
         setError("页面容器尺寸为 0，无法挂载 WebView。请展开窗口或点击左侧「上报会话」查看历史上报。");
         return;
       }
 
-      await createWebview();
+      for (let attempt = 0; attempt < MOUNT_MEASURE_ATTEMPTS; attempt += 1) {
+        if (cancelled) return;
+        if (await createWebview()) return;
+        await new Promise((r) => requestAnimationFrame(() => r(undefined)));
+      }
+
+      if (!cancelled && !webviewMounted) {
+        failMeasure();
+      }
     };
 
-    resizeObserver = new ResizeObserver(() => {
+    const onLayoutChange = () => {
       if (panelStateRef.current !== "hidden") {
-        void syncBounds().catch(() => undefined);
+        void syncBounds().catch((err) => logBoundsSyncError("layout sync", err));
       }
       if (!webviewMounted) {
         void createWebview().catch((e) => {
@@ -269,8 +323,23 @@ export default function PageBrowser({
           setError(formatInvokeError(e));
         });
       }
-    });
-    resizeObserver.observe(host);
+    };
+
+    resizeObserver = new ResizeObserver(onLayoutChange);
+    resizeObserver.observe(panelRef.current ?? host);
+
+    const sidebarEl = sidebarRef?.current;
+    if (sidebarEl) {
+      sidebarObserver = new ResizeObserver(onLayoutChange);
+      sidebarObserver.observe(sidebarEl);
+    }
+
+    const onWindowResize = () => {
+      if (panelStateRef.current !== "hidden") {
+        void syncBounds().catch((err) => logBoundsSyncError("window resize sync", err));
+      }
+    };
+    window.addEventListener("resize", onWindowResize);
 
     void boot().catch((e) => {
       console.error(e);
@@ -286,69 +355,83 @@ export default function PageBrowser({
       clearPollTimer();
       unlistenLoad?.();
       resizeObserver?.disconnect();
+      sidebarObserver?.disconnect();
+      window.removeEventListener("resize", onWindowResize);
       void closePageWebview(pageId);
     };
-  }, [pageId, url, proxyPort, interceptReportingEnabled]);
+  }, [pageId, url, proxyPort, interceptReportingEnabled, sidebarRef]);
 
   // Visibility effect — show/hide native webview when panel state changes
   useEffect(() => {
     if (!isTauriRuntime() || !mounted) return;
     if (panelState === "visible") {
       const show = async () => {
+        const panel = panelRef.current;
         const host = hostRef.current;
-        if (!host) return;
-        const rect = await waitForHostSize(host);
-        if (rect) {
-          await syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height);
+        if (!panel && !host) return;
+        const measureEl = host ?? panel!;
+        const sized = await waitForHostSize(measureEl);
+        if (sized && panel) {
+          const edges = measurePageWebviewHorizontal(panel, sidebarRef?.current);
+          if (edges) {
+            await syncPageWebviewBounds(pageId, edges.sidebarRight, edges.panelRight);
+          }
         }
         await setPageWebviewVisible(pageId, true);
       };
-      void show().catch(() => undefined);
+      void show().catch((err) => logBoundsSyncError("show webview", err));
     } else {
-      void setPageWebviewVisible(pageId, false).catch(() => undefined);
+      void setPageWebviewVisible(pageId, false).catch((err) => logBoundsSyncError("hide webview", err));
     }
-  }, [pageId, panelState, mounted]);
+  }, [pageId, panelState, mounted, sidebarRef]);
 
   // Keep bounds in sync when host stays sized but webview is hidden (e.g. 会话记录 overlay)
   useEffect(() => {
     if (!isTauriRuntime() || !mounted || panelState !== "layout-only") return;
-    const host = hostRef.current;
-    if (!host) return;
-    void waitForHostSize(host)
-      .then((rect) => {
-        if (rect) {
-          return syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height);
-        }
+    const measureEl = hostRef.current ?? panelRef.current;
+    if (!measureEl) return;
+    void waitForHostSize(measureEl)
+      .then((sized) => {
+        const panel = panelRef.current;
+        if (!sized || !panel) return;
+        const edges = measurePageWebviewHorizontal(panel, sidebarRef?.current);
+        if (!edges) return;
+        return syncPageWebviewBounds(pageId, edges.sidebarRight, edges.panelRight);
       })
-      .catch(() => undefined);
-  }, [pageId, panelState, mounted]);
+      .catch((err) => logBoundsSyncError("layout-only sync", err));
+  }, [pageId, panelState, mounted, sidebarRef]);
 
   // Re-sync bounds when inspector panel toggles (layout width changes)
   useEffect(() => {
     if (!isTauriRuntime() || !mounted || panelState !== "visible") return;
-    const timer = window.setTimeout(() => {
-      const rect = hostRef.current?.getBoundingClientRect();
-      if (rect && rect.width >= 1 && rect.height >= 1) {
-        void syncPageWebviewBounds(pageId, rect.x, rect.y, rect.width, rect.height).catch(
-          () => undefined,
-        );
-      }
-    }, 80);
+    const timer = window.setTimeout(pushBounds, BOUNDS_SYNC_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [pageId, panelState, mounted, inspectorOpen]);
+  }, [panelState, mounted, inspectorOpen, pushBounds]);
 
-  const showChrome = active;
+  // Window focus can drift native webview over the sidebar — debounced re-sync.
+  useEffect(() => {
+    if (!isTauriRuntime() || !mounted || panelState !== "visible") return;
+    const onFocus = () => debouncedPushBounds();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [mounted, panelState, debouncedPushBounds]);
+
   const panelStyle: CSSProperties = layoutActive
     ? {
-        flex: inspectorOpen && active ? "0 0 58%" : 1,
+        position: "absolute",
+        top: 0,
+        bottom: 0,
+        left: 0,
+        ...(inspectorOpen && active ? { width: "58%" } : { right: 0 }),
         minWidth: 0,
         minHeight: 0,
         display: "flex",
         flexDirection: "column",
         borderRight: inspectorOpen && active ? "1px solid #ededf0" : "none",
-        background: "var(--c-bg-2)",
+        background: "var(--c-bg)",
         visibility: active ? "visible" : "hidden",
         pointerEvents: active ? "auto" : "none",
+        overflow: "hidden",
       }
     : {
         position: "absolute",
@@ -360,52 +443,7 @@ export default function PageBrowser({
       };
 
   return (
-    <div style={panelStyle}>
-      {showChrome && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "6px 10px 6px 12px",
-            borderBottom: "1px solid #ededf0",
-            flex: "none",
-            background: "var(--c-bg-2)",
-          }}
-        >
-          <span
-            style={{
-              flex: 1,
-              minWidth: 0,
-              fontSize: 11.5,
-              color: "var(--c-text-3)",
-              fontFamily: "ui-monospace,'SF Mono',Menlo,monospace",
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {displayUrl}
-          </span>
-          <button
-            onClick={onToggleInspector}
-            title={inspectorOpen ? "收起请求面板" : "展开请求面板"}
-            style={{
-              flex: "none",
-              fontSize: 11,
-              color: "var(--c-text-2)",
-              background: "var(--c-bg-4)",
-              border: "0.5px solid #d9d9de",
-              borderRadius: 6,
-              padding: "3px 9px",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {inspectorOpen ? "隐藏请求 ›" : `‹ 请求${requestCount ? ` ${requestCount}` : ""}`}
-          </button>
-        </div>
-      )}
+    <div ref={panelRef} style={panelStyle}>
       <div ref={hostRef} style={{ flex: 1, minHeight: 0, position: "relative", background: "var(--c-bg)" }}>
         {layoutActive && status === "loading" && (
           <div

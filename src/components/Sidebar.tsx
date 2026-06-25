@@ -1,5 +1,5 @@
 // Left sidebar — search, Chat, session records, Pages, Certificates, Settings.
-import type { CSSProperties } from "react";
+import { forwardRef, type CSSProperties } from "react";
 import type { Page } from "../types";
 import {
   DEFAULT_PAGE_DISPLAY_NAME,
@@ -178,7 +178,6 @@ type Props = {
   onDeletePage: (id: string) => void | Promise<void>;
   onToggleInterceptReporting: (pageId: string, enabled: boolean) => void | Promise<void>;
   onAddPage: () => void;
-  onCerts: () => void;
   onSettings: () => void;
 };
 
@@ -188,7 +187,7 @@ function partitionPages(pages: Page[]) {
   return { chatPage, otherPages };
 }
 
-export default function Sidebar(p: Props) {
+const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
   const sessionsMode = p.navMode === "sessions";
   const { chatPage, otherPages } = partitionPages(p.pages);
   const navSel = (on: boolean): CSSProperties => (on ? { ...navBase, background: "var(--c-accent-soft)" } : navBase);
@@ -199,12 +198,17 @@ export default function Sidebar(p: Props) {
   if (p.collapsed) {
     return (
       <div
+        ref={ref}
         className="asc-glass-chrome liquid-glass"
         data-asc-region="sidebar"
         data-depth="2"
         style={{
           width: 40,
           flex: "none",
+          alignSelf: "stretch",
+          height: "100%",
+          position: "relative",
+          zIndex: 4,
           background: "var(--c-bg-3)",
           borderRight: "1px solid var(--c-border-2)",
           display: "flex",
@@ -266,9 +270,6 @@ export default function Sidebar(p: Props) {
           );
         })}
         <div style={{ flex: 1 }} />
-        <button onClick={p.onCerts} title="Certificates" style={{ ...collapseToggle, marginBottom: 2 }}>
-          🛡
-        </button>
         <button onClick={p.onSettings} title="Settings" style={{ ...collapseToggle, marginBottom: 8 }}>
           ⚙
         </button>
@@ -278,10 +279,11 @@ export default function Sidebar(p: Props) {
 
   return (
     <div
+      ref={ref}
       className="asc-glass-chrome liquid-glass"
       data-asc-region="sidebar"
       data-depth="2"
-      style={{ width: 246, flex: "none", background: "var(--c-bg-3)", borderRight: "1px solid var(--c-border-2)", display: "flex", flexDirection: "column", minHeight: 0 }}
+      style={{ width: 246, flex: "none", alignSelf: "stretch", position: "relative", zIndex: 4, background: "var(--c-bg-3)", borderRight: "1px solid var(--c-border-2)", display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}
     >
       {/* search + collapse */}
       <div style={{ padding: "10px 11px 6px", display: "flex", alignItems: "center", gap: 6 }}>
@@ -417,11 +419,6 @@ export default function Sidebar(p: Props) {
 
       {/* footer nav */}
       <div style={{ borderTop: "1px solid var(--c-border-2)", padding: 8, display: "flex", flexDirection: "column", gap: 2 }}>
-        <button onClick={p.onCerts} style={navSel(p.navMode === "certs")}>
-          <span style={{ width: 18, textAlign: "center", fontSize: 13 }}>🛡</span>
-          <span style={{ flex: 1, textAlign: "left" }}>Certificates</span>
-          <span style={{ fontSize: 10, fontWeight: 600, color: "#30a14e", background: "#e7f6ec", borderRadius: 5, padding: "2px 6px" }}>Trusted</span>
-        </button>
         <button onClick={p.onSettings} style={navSel(p.navMode === "settings")}>
           <span style={{ width: 18, textAlign: "center", fontSize: 13 }}>⚙</span>
           <span style={{ flex: 1, textAlign: "left" }}>Settings</span>
@@ -429,4 +426,6 @@ export default function Sidebar(p: Props) {
       </div>
     </div>
   );
-}
+});
+
+export default Sidebar;

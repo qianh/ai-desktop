@@ -215,20 +215,16 @@ export async function mountPageWebview(
   url: string,
   proxyPort: number,
   interceptReportingEnabled: boolean,
-  x: number,
-  y: number,
-  width: number,
-  height: number
+  sidebarRight: number,
+  panelRight: number,
 ): Promise<void> {
   await call<void>("mount_page_webview", {
     pageId,
     url,
     proxyPort,
     interceptReportingEnabled,
-    x,
-    y,
-    width,
-    height,
+    sidebarRight,
+    panelRight,
   });
 }
 
@@ -246,12 +242,10 @@ export async function closePageWebview(pageId: string): Promise<void> {
 
 export async function syncPageWebviewBounds(
   pageId: string,
-  x: number,
-  y: number,
-  width: number,
-  height: number
+  sidebarRight: number,
+  panelRight: number,
 ): Promise<void> {
-  await call<void>("sync_page_webview_bounds", { pageId, x, y, width, height });
+  await call<void>("sync_page_webview_bounds", { pageId, sidebarRight, panelRight });
 }
 
 export async function stopSession(sessionId: string): Promise<void> {

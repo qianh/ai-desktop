@@ -2,9 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen as tauriListen } from "@tauri-apps/api/event";
 import {
-  generateCertificate,
   getCertificateStatus,
-  installCertificate,
   getFlowDetail,
   listFlows,
   listPages,
@@ -14,7 +12,6 @@ import {
   uploadInterceptsToSupabase,
   closePageWebview,
   openPageWithCapture,
-  removeCertificate,
   removePage,
   savePage,
   setPageInterceptReporting,
@@ -25,7 +22,6 @@ import type { Flow, InterceptedFetch, Page } from "./types";
 import TitleBar from "./components/TitleBar";
 import StatusBar from "./components/StatusBar";
 import Sidebar from "./components/Sidebar";
-import CertManager from "./components/CertManager";
 import SessionsWorkspace from "./components/SessionsWorkspace";
 
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
@@ -53,8 +49,10 @@ import {
 import AddPageModal from "./components/modals/AddPageModal";
 import CertGuideModal from "./components/modals/CertGuideModal";
 import DeletePageModal from "./components/modals/DeletePageModal";
+import { useCertHandlers } from "./hooks/useCertHandlers";
+import { APP_STATUS_BAR_H, APP_TITLE_BAR_H } from "./lib/chromeLayout";
 
-type NavMode = "sessions" | "records" | "certs" | "settings";
+type NavMode = "sessions" | "records" | "settings";
 type ModalKind = null | "addPage" | "certGuide";
 
 type PageSessionMeta = {
@@ -91,6 +89,7 @@ export default function App() {
   const autoCaptureAttempted = useRef<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
   const [interceptsByPage, setInterceptsByPage] = useState<Record<string, InterceptedFetch[]>>({});
 
   const changeTheme = (t: ThemeMode) => {
@@ -140,6 +139,8 @@ export default function App() {
     const status = await getCertificateStatus();
     setCertState(status.state);
   }, []);
+
+  const certHandlers = useCertHandlers(refreshCert, setError, () => setModal("certGuide"));
 
   const refreshFlowsForPage = useCallback(async (pageId: string) => {
     const sessionId = sessionsByPage[pageId];
@@ -222,9 +223,7 @@ export default function App() {
   const flows = activeFlows();
 
   const titleSuffix =
-    navMode === "certs"
-      ? "Certificates"
-      : navMode === "settings"
+    navMode === "settings"
       ? "Settings"
       : recordsMode
       ? "会话记录"
@@ -565,10 +564,12 @@ export default function App() {
     <div
       className="asc-app-root"
       style={{
-        height: "100vh",
+        height: "100%",
         width: "100%",
         boxSizing: "border-box",
         display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
         background: "var(--c-bg)",
         fontFamily: "var(--font-sans)",
       }}
@@ -578,10 +579,13 @@ export default function App() {
         style={{
           flex: 1,
           minWidth: 0,
+          minHeight: 0,
+          height: "100%",
           background: "var(--c-bg)",
           overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
+          display: "grid",
+          gridTemplateRows: `${APP_TITLE_BAR_H}px 1fr ${APP_STATUS_BAR_H}px`,
+          gridTemplateColumns: "1fr",
         }}
       >
         <TitleBar
@@ -594,8 +598,9 @@ export default function App() {
           sessionRecordsActive={recordsMode}
         />
 
-        <div className="asc-workspace" style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        <div className="asc-workspace" style={{ minHeight: 0, overflow: "hidden", display: "flex", background: "var(--c-bg)" }}>
           <Sidebar
+            ref={sidebarRef}
             pages={enrichedPages}
             navMode={navMode}
             activeId={activeId}
@@ -607,53 +612,13 @@ export default function App() {
             onDeletePage={handleDeletePage}
             onToggleInterceptReporting={handleToggleInterceptReporting}
             onAddPage={() => setModal("addPage")}
-            onCerts={() => setNavMode("certs")}
             onSettings={() => setNavMode("settings")}
           />
 
           <div
             className="asc-content-panel"
-            style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0, background: "var(--c-bg)" }}
+            style={{ flex: 1, minWidth: 0, position: "relative", display: "flex", flexDirection: "column", minHeight: 0, height: "100%", overflow: "hidden", background: "var(--c-bg)" }}
           >
-            {navMode === "certs" && (
-              <CertManager
-                state={certState}
-                onInstall={async () => {
-                  try {
-                    await installCertificate();
-                    await refreshCert();
-                    setModal("certGuide");
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : String(e));
-                  }
-                }}
-                onOpenGuide={async () => {
-                  try {
-                    await openCertificateGuide();
-                    setModal("certGuide");
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : String(e));
-                  }
-                }}
-                onGenerate={async () => {
-                  try {
-                    await generateCertificate();
-                    await refreshCert();
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : String(e));
-                  }
-                }}
-                onRemove={async () => {
-                  try {
-                    await removeCertificate();
-                    await refreshCert();
-                  } catch (e) {
-                    setError(e instanceof Error ? e.message : String(e));
-                  }
-                }}
-                onRefresh={refreshCert}
-              />
-            )}
             {navMode === "settings" && (
               <Settings
                 toggles={toggles}
@@ -664,6 +629,7 @@ export default function App() {
                 onStylePreset={changeStylePreset}
                 glassIntensity={glassIntensity}
                 onGlassIntensity={changeGlassIntensity}
+                cert={{ state: certState, ...certHandlers }}
               />
             )}
             {(sessionsMode || recordsMode) && (
@@ -692,6 +658,7 @@ export default function App() {
                 onToggleRecord={handleStopRecording}
                 onClearFlows={clearFlows}
                 onStartCapture={handleStartCaptureForPage}
+                sidebarRef={sidebarRef}
               />
             )}
           </div>

@@ -5,6 +5,7 @@ const STEPS = ["Generated", "Installed", "Trusted"];
 
 type Props = {
   state: string;
+  embedded?: boolean;
   onInstall: () => void | Promise<void>;
   onOpenGuide: () => void | Promise<void>;
   onGenerate: () => void | Promise<void>;
@@ -29,17 +30,25 @@ function stateLabel(state: string): string {
   }
 }
 
-export default function CertManager({ state, onInstall, onOpenGuide, onGenerate, onRemove, onRefresh }: Props) {
+export default function CertManager({ state, embedded = false, onInstall, onOpenGuide, onGenerate, onRemove, onRefresh }: Props) {
   const trusted = state === "Trusted";
   const generated = state === "Generated" || state === "Installed" || trusted;
 
-  return (
-    <div style={{ flex: 1, overflow: "auto", minHeight: 0, padding: "28px 36px" }}>
-      <div style={{ maxWidth: 640, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 21, fontWeight: 600, margin: "0 0 4px", color: "var(--c-text)" }}>Certificate Manager</h1>
-        <p style={{ fontSize: 13, color: "var(--c-text-3)", margin: "0 0 22px", lineHeight: 1.5 }}>
-          AppScope 使用本机生成的 Root CA 解密经其代理的 HTTPS 流量。私钥仅保存在本机，永不上传。
-        </p>
+  const content = (
+    <>
+        {!embedded && (
+          <>
+            <h1 style={{ fontSize: 21, fontWeight: 600, margin: "0 0 4px", color: "var(--c-text)" }}>Certificate Manager</h1>
+            <p style={{ fontSize: 13, color: "var(--c-text-3)", margin: "0 0 22px", lineHeight: 1.5 }}>
+              AppScope 使用本机生成的 Root CA 解密经其代理的 HTTPS 流量。私钥仅保存在本机，永不上传。
+            </p>
+          </>
+        )}
+        {embedded && (
+          <p style={{ fontSize: 12.5, color: "var(--c-text-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
+            AppScope 使用本机生成的 Root CA 解密经其代理的 HTTPS 流量。私钥仅保存在本机，永不上传。
+          </p>
+        )}
 
         <div
           style={{
@@ -130,7 +139,16 @@ export default function CertManager({ state, onInstall, onOpenGuide, onGenerate,
             信任 AppScope CA 后，AppScope 可以解密通过它代理的 HTTPS 流量。请只在你信任的设备和会话中开启抓包。不要抓取银行、支付、密码管理器等敏感应用。
           </p>
         </div>
-      </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div style={{ padding: "16px 16px 18px" }}>{content}</div>;
+  }
+
+  return (
+    <div style={{ flex: 1, overflow: "auto", minHeight: 0, padding: "28px 36px" }}>
+      <div style={{ maxWidth: 640, margin: "0 auto" }}>{content}</div>
     </div>
   );
 }

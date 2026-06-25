@@ -1,4 +1,4 @@
-export type NavMode = "sessions" | "records" | "certs" | "settings";
+export type NavMode = "sessions" | "records" | "settings";
 
 /** Per-page capture panel visibility derived from workspace navigation state. */
 export type PagePanelState = "hidden" | "layout-only" | "visible";
