@@ -344,18 +344,22 @@ export async function uploadInterceptsToSupabase(
   if (!config.url || !config.key || items.length === 0) return;
 
   const base = config.url.replace(/\/$/, "");
-  const rows = items.map((item) => {
+  const rows = items.flatMap((item) => {
     const meta = classifyInterceptForStorage(item);
+    if (meta.isConversation !== true) return [];
+
     const sanitized = sanitizeInterceptForUpload(item);
-    return {
+    return [{
       ...sanitized,
       page_id: pageId,
       preview_text: sanitizePostgresText(meta.previewText),
       is_conversation: meta.isConversation,
       conversation_id:
         meta.conversationId != null ? stripNullBytes(meta.conversationId) : meta.conversationId,
-    };
+    }];
   });
+  if (rows.length === 0) return;
+
   const resp = await fetch(`${base}/rest/v1/intercepts`, {
     method: "POST",
     headers: {

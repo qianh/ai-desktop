@@ -231,7 +231,7 @@ export default function App() {
       ? !isDefaultChatPage(active.host)
         ? active.name
         : DEFAULT_PAGE_DISPLAY_NAME
-      : "AppScope";
+      : "枢境";
 
   const statusLeft = error
     ? `Error · ${error}`

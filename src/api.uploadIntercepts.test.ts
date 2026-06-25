@@ -14,10 +14,12 @@ const sample: InterceptedFetch = {
   url: "https://chatgpt.com/backend-api/conversation",
   method: "POST",
   req_headers: { "content-type": "application/json" },
-  req_body: "{\"messages\":[]}",
+  req_body: JSON.stringify({
+    messages: [{ role: "user", content: { parts: ["hello"] } }],
+  }),
   status: 200,
   resp_headers: {},
-  resp_body: "data: {}",
+  resp_body: 'data: {"message":{"content":{"parts":["hi"]}}}',
   duration_ms: 12,
 };
 
@@ -137,9 +139,34 @@ describe("uploadInterceptsToSupabase", () => {
     expect(row.conversation_id).toBe("02b99671-7f71-40c1-bc23-682d774acc5e");
   });
 
-  it("marks built-in Chat utility /_serverFn GET as non-conversation", async () => {
+  it("omits built-in Chat utility /_serverFn GET from upload", async () => {
     const noise: InterceptedFetch = {
       ...sample,
+      url: "https://chat.worldwide-logistics.cn/_serverFn/ae5be38d886e",
+      method: "GET",
+      req_body: null,
+      resp_body:
+        '{"t":10,"i":0,"p":{"k":["result","error","context"],"v":[{"t":1,"s":"inquire-quotation"},{"t":2,"s":1}]}}',
+    };
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await uploadInterceptsToSupabase("page-1", [noise], config);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("uploads only conversation rows from a mixed batch", async () => {
+    const chat: InterceptedFetch = {
+      ...sample,
+      id: "chat-row",
+      req_body: JSON.stringify({
+        messages: [{ role: "user", content: { parts: ["保留这条会话"] } }],
+      }),
+    };
+    const noise: InterceptedFetch = {
+      ...sample,
+      id: "noise-row",
       url: "https://chat.worldwide-logistics.cn/_serverFn/ae5be38d886e",
       method: "GET",
       req_body: null,
@@ -156,10 +183,12 @@ describe("uploadInterceptsToSupabase", () => {
       }),
     );
 
-    await uploadInterceptsToSupabase("page-1", [noise], config);
-    const row = JSON.parse(postedBody)[0] as InterceptedFetch;
-    expect(row.is_conversation).toBe(false);
-    expect(row.preview_text).toBeNull();
+    await uploadInterceptsToSupabase("page-1", [chat, noise], config);
+    const rows = JSON.parse(postedBody) as InterceptedFetch[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe("chat-row");
+    expect(rows[0].is_conversation).toBe(true);
+    expect(rows[0].preview_text).toBe("保留这条会话");
   });
 
   it("sets preview_text for real chat POST payloads", async () => {
@@ -186,8 +215,7 @@ describe("uploadInterceptsToSupabase", () => {
     expect(row.preview_text).toBe("SSD健康状态分析");
   });
 
-  it("strips binary and null-byte bodies before POST", async () => {
-    const gzipLike = String.fromCharCode(0x1f, 0x8b, 0x08) + "payload";
+  it("keeps existing sanitization for uploaded conversation rows", async () => {
     let postedBody = "";
     vi.stubGlobal(
       "fetch",
@@ -199,14 +227,17 @@ describe("uploadInterceptsToSupabase", () => {
 
     await uploadInterceptsToSupabase(
       "page-1",
-      [{ ...sample, req_body: gzipLike, resp_body: "ok\u0000" }],
+      [{
+        ...sample,
+        req_headers: { "x-test": "a\u0000b" },
+        resp_body: "ok\u0000",
+      }],
       config,
     );
 
     const row = JSON.parse(postedBody)[0] as InterceptedFetch;
-    expect(row.req_body).toBe("[binary body omitted]");
     expect(row.resp_body).toBe("ok");
-    expect(row.req_body).not.toContain("\0");
+    expect(row.req_headers["x-test"]).toBe("ab");
   });
 
   it("throws when Supabase returns an error", async () => {

@@ -1,4 +1,9 @@
 {
+  "bundle": {
+    "macOS": {
+      "bundleName": "枢境"
+    }
+  },
   "app": {
     "macOSPrivateApi": true,
     "windows": [
