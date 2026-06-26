@@ -1,5 +1,5 @@
 // Left sidebar — search, Chat, session records, Pages, Certificates, Settings.
-import { forwardRef, type CSSProperties } from "react";
+import { forwardRef, useState, type CSSProperties } from "react";
 import type { Page } from "../types";
 import {
   DEFAULT_PAGE_DISPLAY_NAME,
@@ -68,6 +68,14 @@ const itemBtn: CSSProperties = {
   padding: "6px 0 6px 9px",
   textAlign: "left",
 };
+const pageRowStyle: CSSProperties = {
+  ...listRowStyle("visible"),
+  gap: 4,
+};
+const pageItemBtn: CSSProperties = {
+  ...itemBtn,
+  padding: "6px 0",
+};
 const deleteBtn: CSSProperties = {
   appearance: "none",
   border: "none",
@@ -95,30 +103,95 @@ const collapseToggle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
 };
-function collapsedIconBtn(sel: boolean): CSSProperties {
+function collapsedPageBtn(sel: boolean): CSSProperties {
   return {
-    ...collapseToggle,
+    appearance: "none",
+    border: "none",
     background: sel ? "var(--c-accent-soft)" : "none",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     width: 28,
     height: 28,
     borderRadius: 7,
-    fontSize: 12,
-    fontWeight: 600,
+    padding: 0,
+    position: "relative",
   };
+}
+
+function faviconSrc(host?: string): string | null {
+  if (!host) return null;
+  try {
+    const { origin } = new URL(host);
+    return `${origin}/favicon.ico`;
+  } catch {
+    return null;
+  }
+}
+
+function PageIcon({
+  letter,
+  color,
+  capturing,
+  host,
+}: {
+  letter: string;
+  color: string;
+  capturing?: boolean;
+  host?: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  const src = faviconSrc(host);
+
+  return (
+    <span style={{ position: "relative", flex: "none", width: 24, height: 24 }}>
+      <span style={{ ...iconStyle(color), opacity: loaded ? 0 : 1 }}>{letter}</span>
+      {src && (
+        <img
+          src={src}
+          width={16}
+          height={16}
+          alt=""
+          style={{ position: "absolute", top: 4, left: 4, borderRadius: 3, opacity: loaded ? 1 : 0 }}
+          onLoad={() => setLoaded(true)}
+        />
+      )}
+      {capturing && <span className="asc-page-status asc-page-status--live" aria-hidden />}
+    </span>
+  );
 }
 
 function reportingTip(enabled: boolean): string {
   return enabled ? "拦截与上报：已开启" : "拦截与上报：已关闭";
 }
 
+function SettingsIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
 type ReportingToggleProps = {
   pageId: string;
   enabled: boolean;
-  compact?: boolean;
   onToggle: (pageId: string, enabled: boolean) => void | Promise<void>;
 };
 
-function ReportingToggle({ pageId, enabled, compact, onToggle }: ReportingToggleProps) {
+function ReportingToggle({ pageId, enabled, onToggle }: ReportingToggleProps) {
   const tip = reportingTip(enabled);
   const btnStyle: CSSProperties = {
     appearance: "none",
@@ -130,18 +203,14 @@ function ReportingToggle({ pageId, enabled, compact, onToggle }: ReportingToggle
     lineHeight: 1,
     color: enabled ? ACCENT : "var(--c-text-3)",
     background: enabled ? "var(--c-accent-soft)" : "transparent",
-    ...(compact
-      ? { width: 18, height: 14, borderRadius: 4, fontSize: 9, padding: 0 }
-      : {
-          flex: "none",
-          width: 22,
-          height: 22,
-          borderRadius: 6,
-          fontSize: 13,
-          position: "relative",
-          zIndex: 2,
-          transition: "background 0.12s ease, color 0.12s ease",
-        }),
+    flex: "none",
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    fontSize: 13,
+    position: "relative",
+    zIndex: 2,
+    transition: "background 0.12s ease, color 0.12s ease",
   };
 
   return (
@@ -230,48 +299,33 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
           <button
             onClick={() => p.onSelect(chatPage.id)}
             title={DEFAULT_PAGE_DISPLAY_NAME}
-            style={{
-              ...collapsedIconBtn(rowSelected(chatPage.id)),
-              color: chatPage.color || "#5a5a5e",
-              position: "relative",
-            }}
+            style={collapsedPageBtn(rowSelected(chatPage.id))}
           >
-            C
-            {chatPage.status === "capturing" && (
-              <span className="asc-page-status asc-page-status--live" aria-hidden />
-            )}
+            <PageIcon
+              letter={chatPage.letter}
+              color={chatPage.color}
+              capturing={chatPage.status === "capturing"}
+              host={chatPage.host}
+            />
           </button>
         )}
         {otherPages.map((pg) => {
           const sel = rowSelected(pg.id);
           const isCapturing = pg.status === "capturing";
           return (
-            <div
+            <button
               key={pg.id}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}
+              onClick={() => p.onSelect(pg.id)}
+              title={pg.name}
+              style={collapsedPageBtn(sel)}
             >
-              <button
-                onClick={() => p.onSelect(pg.id)}
-                title={pg.name}
-                style={{ ...collapsedIconBtn(sel), color: pg.color || "#5a5a5e", position: "relative" }}
-              >
-                {pg.letter}
-                {isCapturing && (
-                  <span className="asc-page-status asc-page-status--live" aria-hidden />
-                )}
-              </button>
-              <ReportingToggle
-                pageId={pg.id}
-                enabled={pg.interceptReportingEnabled}
-                compact
-                onToggle={p.onToggleInterceptReporting}
-              />
-            </div>
+              <PageIcon letter={pg.letter} color={pg.color} capturing={isCapturing} host={pg.host} />
+            </button>
           );
         })}
         <div style={{ flex: 1 }} />
         <button onClick={p.onSettings} title="Settings" style={{ ...collapseToggle, marginBottom: 8 }}>
-          ⚙
+          <SettingsIcon size={18} />
         </button>
       </div>
     );
@@ -313,12 +367,12 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
             style={{ ...listRowStyle("visible"), marginBottom: 4 }}
           >
             <button onClick={() => p.onSelect(chatPage.id)} style={itemBtn}>
-              <span style={{ position: "relative", flex: "none", display: "flex" }}>
-                <span style={iconStyle(chatPage.color)}>{chatPage.letter}</span>
-                {chatPage.status === "capturing" && (
-                  <span className="asc-page-status asc-page-status--live" aria-hidden />
-                )}
-              </span>
+              <PageIcon
+                letter={chatPage.letter}
+                color={chatPage.color}
+                capturing={chatPage.status === "capturing"}
+                host={chatPage.host}
+              />
               <span style={{ flex: 1, textAlign: "left", minWidth: 0, overflow: "hidden" }}>
                 <span
                   style={{
@@ -377,15 +431,15 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
             <div
               key={pg.id}
               className={listRowClass(sel)}
-              style={listRowStyle("visible")}
+              style={pageRowStyle}
             >
-              <button onClick={() => p.onSelect(pg.id)} style={itemBtn}>
-                <span style={{ position: "relative", flex: "none", display: "flex" }}>
-                  <span style={iconStyle(pg.color)}>{pg.letter}</span>
-                  {isCapturing && (
-                    <span className="asc-page-status asc-page-status--live" aria-hidden />
-                  )}
-                </span>
+              <ReportingToggle
+                pageId={pg.id}
+                enabled={reportingOn}
+                onToggle={p.onToggleInterceptReporting}
+              />
+              <button onClick={() => p.onSelect(pg.id)} style={pageItemBtn}>
+                <PageIcon letter={pg.letter} color={pg.color} capturing={isCapturing} host={pg.host} />
                 <span style={{ flex: 1, textAlign: "left", minWidth: 0, overflow: "hidden" }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 500, color: "var(--c-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {pg.name}
@@ -393,11 +447,6 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
                   <span style={{ display: "block", fontSize: 11, color: "var(--c-text-4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pg.host}</span>
                 </span>
               </button>
-              <ReportingToggle
-                pageId={pg.id}
-                enabled={reportingOn}
-                onToggle={p.onToggleInterceptReporting}
-              />
               <button
                 onClick={(e) => {
                   e.preventDefault();
@@ -420,7 +469,9 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
       {/* footer nav */}
       <div style={{ borderTop: "1px solid var(--c-border-2)", padding: 8, display: "flex", flexDirection: "column", gap: 2 }}>
         <button onClick={p.onSettings} style={navSel(p.navMode === "settings")}>
-          <span style={{ width: 18, textAlign: "center", fontSize: 13 }}>⚙</span>
+          <span style={{ width: 24, flex: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <SettingsIcon size={18} />
+          </span>
           <span style={{ flex: 1, textAlign: "left" }}>Settings</span>
         </button>
       </div>

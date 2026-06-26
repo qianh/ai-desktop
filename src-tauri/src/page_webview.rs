@@ -8,7 +8,7 @@ const PAGE_WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10
 /// Must match src/lib/chromeLayout.ts APP_TITLE_BAR_H.
 pub const PAGE_WEBVIEW_TITLE_BAR_H: f64 = 39.0;
 /// Must match src/lib/chromeLayout.ts APP_STATUS_BAR_H.
-pub const PAGE_WEBVIEW_STATUS_BAR_H: f64 = 25.0;
+pub const PAGE_WEBVIEW_STATUS_BAR_H: f64 = 0.0;
 
 /// Derive child webview bounds from window client size + horizontal DOM anchors.
 pub fn page_webview_logical_bounds(
@@ -477,7 +477,7 @@ mod tests {
         assert_eq!(x, 246.0);
         assert_eq!(y, 39.0);
         assert_eq!(w, 954.0);
-        assert_eq!(h, 796.0);
+        assert_eq!(h, 821.0);
     }
 
     #[test]

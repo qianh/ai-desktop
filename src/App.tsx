@@ -20,7 +20,6 @@ import {
 
 import type { Flow, InterceptedFetch, Page } from "./types";
 import TitleBar from "./components/TitleBar";
-import StatusBar from "./components/StatusBar";
 import Sidebar from "./components/Sidebar";
 import SessionsWorkspace from "./components/SessionsWorkspace";
 
@@ -50,7 +49,7 @@ import AddPageModal from "./components/modals/AddPageModal";
 import CertGuideModal from "./components/modals/CertGuideModal";
 import DeletePageModal from "./components/modals/DeletePageModal";
 import { useCertHandlers } from "./hooks/useCertHandlers";
-import { APP_STATUS_BAR_H, APP_TITLE_BAR_H } from "./lib/chromeLayout";
+import { APP_TITLE_BAR_H } from "./lib/chromeLayout";
 
 type NavMode = "sessions" | "records" | "settings";
 type ModalKind = null | "addPage" | "certGuide";
@@ -66,7 +65,7 @@ export default function App() {
   const [flowsByPage, setFlowsByPage] = useState<Record<string, Flow[]>>({});
   const [sessionsByPage, setSessionsByPage] = useState<Record<string, string>>({});
   const [sessionMetaByPage, setSessionMetaByPage] = useState<Record<string, PageSessionMeta>>({});
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [navMode, setNavMode] = useState<NavMode>("sessions");
@@ -232,14 +231,6 @@ export default function App() {
         ? active.name
         : DEFAULT_PAGE_DISPLAY_NAME
       : "枢境";
-
-  const statusLeft = error
-    ? `Error · ${error}`
-    : loading
-    ? "Loading…"
-    : recording
-    ? "Recording"
-    : "Idle";
 
   const toggleInspector = useCallback(() => setInspectorOpen((v) => !v), []);
 
@@ -584,7 +575,7 @@ export default function App() {
           background: "var(--c-bg)",
           overflow: "hidden",
           display: "grid",
-          gridTemplateRows: `${APP_TITLE_BAR_H}px 1fr ${APP_STATUS_BAR_H}px`,
+          gridTemplateRows: `${APP_TITLE_BAR_H}px 1fr`,
           gridTemplateColumns: "1fr",
         }}
       >
@@ -663,15 +654,6 @@ export default function App() {
             )}
           </div>
         </div>
-
-        <StatusBar
-          statusLeft={statusLeft}
-          live={recording}
-          hasPageSession={!!activeSessionMeta}
-          proxyPort={activeSessionMeta?.proxyPort}
-          certState={certState}
-          quicDisabled={toggles.quic}
-        />
       </div>
 
       {(modal != null || deleteTarget != null) && (
