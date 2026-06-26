@@ -188,7 +188,8 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
         maxHeight: MODAL_VIEWPORT_HEIGHT,
         background: "var(--c-bg)",
         borderRadius: 13,
-        boxShadow: "0 24px 60px rgba(0,0,0,.4)",
+        border: "1px solid var(--c-border-3)",
+        boxShadow: "0 24px 80px rgba(0,0,0,.6), 0 0 0 0.5px var(--c-border-3)",
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
@@ -200,7 +201,7 @@ export default function SessionRecordModal({ record: initialRecord, config, onCl
           alignItems: "center",
           justifyContent: "space-between",
           padding: "14px 18px",
-          borderBottom: "1px solid #ededf0",
+          borderBottom: "1px solid var(--c-border)",
           background: "var(--c-bg-2)",
           flex: "none",
         }}

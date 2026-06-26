@@ -1,4 +1,5 @@
 import { useMemo, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { REPORTED_INTERCEPTS_LIMIT, type ConversationTruncationReason } from "../api";
 import { formatTimestamp } from "../lib/format";
 import { conversationPreview } from "../lib/conversationFilter";
@@ -412,7 +413,7 @@ function SessionRecordsList({
           })}
       </div>
 
-      {selectedRecord && (
+      {selectedRecord && createPortal(
         <div
           onClick={() => setSelectedRecord(null)}
           style={{
@@ -431,7 +432,8 @@ function SessionRecordsList({
             config={supabaseConfig}
             onClose={() => setSelectedRecord(null)}
           />
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
