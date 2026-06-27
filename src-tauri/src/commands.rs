@@ -14,7 +14,7 @@ use crate::proxy::{start_proxy, sync_event_file, ProxyRuntime};
 use crate::store::FlowStore;
 use chrono::Utc;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 use uuid::Uuid;
 
@@ -46,6 +46,8 @@ struct AppState {
     proxies: HashMap<String, ProxyRuntime>,
     /// Last processed physical line in each session event file for js_intercept emits.
     intercept_sync_lines: HashMap<String, usize>,
+    /// Flow ids already emitted as page-content-intercept per session.
+    intercept_emitted_flow_ids: HashMap<String, HashSet<String>>,
 }
 
 static STATE: OnceLock<Mutex<AppState>> = OnceLock::new();
@@ -59,6 +61,7 @@ fn state_mutex() -> &'static Mutex<AppState> {
             paths,
             proxies: HashMap::new(),
             intercept_sync_lines: HashMap::new(),
+            intercept_emitted_flow_ids: HashMap::new(),
         })
     })
 }
@@ -165,8 +168,10 @@ pub fn remove_page(page_id: String) -> Result<(), String> {
                     &event_file,
                     None,
                     None,
+                    None,
                 );
                 state.intercept_sync_lines.remove(&session_id);
+                state.intercept_emitted_flow_ids.remove(&session_id);
                 proxy.stop();
             }
         }
@@ -224,6 +229,7 @@ pub fn open_page_with_capture_core(page_id: &str) -> Result<SessionInfo, String>
             &event_file,
             None,
             None,
+            None,
         );
 
         Ok(SessionInfo {
@@ -247,8 +253,10 @@ pub fn stop_session(session_id: String) -> Result<(), String> {
                 &event_file,
                 None,
                 None,
+                None,
             );
             state.intercept_sync_lines.remove(&session_id);
+            state.intercept_emitted_flow_ids.remove(&session_id);
             proxy.stop();
         }
         if let Some(mut session) = state.store.get_session(&session_id)? {
@@ -269,12 +277,17 @@ pub fn list_flows(app: tauri::AppHandle, session_id: String) -> Result<Vec<serde
                 .intercept_sync_lines
                 .entry(session_id.clone())
                 .or_insert(0);
+            let emitted_flow_ids = state
+                .intercept_emitted_flow_ids
+                .entry(session_id.clone())
+                .or_default();
             let _ = sync_event_file(
                 &state.store,
                 &session_id,
                 &proxy.event_file,
                 Some(&app),
                 Some(line_cursor),
+                Some(emitted_flow_ids),
             );
         }
         let flows = state.store.list_flows(&session_id)?;
@@ -357,6 +370,7 @@ mod tests {
             paths,
             proxies: HashMap::new(),
             intercept_sync_lines: HashMap::new(),
+            intercept_emitted_flow_ids: HashMap::new(),
         }));
     }
 

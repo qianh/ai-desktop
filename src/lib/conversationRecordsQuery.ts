@@ -71,6 +71,9 @@ export const STRICT_CONVERSATION_URL_OR_VALUE =
 export const SESSION_LIST_OR_VALUE =
   "(is_conversation.eq.true,and(method.in.(GET,POST),url.ilike.*_serverFn*))";
 
+/** Max ids per PostgREST id=in.(...) hydrate request (URL length safe). */
+export const HYDRATE_IDS_BATCH_SIZE = 50;
+
 /** Per-request page size when loading a full conversation thread. */
 export const CONVERSATION_THREAD_PAGE_SIZE = 200;
 
@@ -82,6 +85,10 @@ export const NOISE_URL_NOT_OR_VALUE =
   "(url.ilike.*analytics*,url.ilike.*/ces/*,url.ilike.*/rgstr/*,url.ilike.*/v1/metrics*,url.ilike.*sentry*,url.ilike.*/ab.test*,url.ilike.*/ab.register*,url.ilike.*/stream_status*,url.ilike.*/init,url.ilike.*/init?*,url.ilike.*/init/*,url.ilike.*/experimental/*)";
 
 export const INTERCEPTS_METADATA_SELECT = "id,timestamp,url,method,page_id";
+
+/** Legacy list select — full bodies, no indexed conversation columns. */
+export const INTERCEPTS_LEGACY_BODY_SELECT =
+  "id,timestamp,url,method,page_id,req_body,resp_body";
 
 /** Lean list query — no req_body/resp_body; preview_text set at upload. */
 export const INTERCEPTS_LIST_SELECT =
@@ -182,6 +189,16 @@ export function conversationListQueryOptions(limit: number): InterceptsQueryOpti
     limit,
     select: INTERCEPTS_LIST_SELECT,
     sessionListFilter: true,
+    httpMethodsOnly: true,
+  };
+}
+
+/** Fallback when indexed columns or session-list or= filter are unavailable. */
+export function urlOnlyListQueryOptions(limit: number): InterceptsQueryOptions {
+  return {
+    limit,
+    select: INTERCEPTS_LEGACY_BODY_SELECT,
+    strictConversationUrlFilter: true,
     httpMethodsOnly: true,
   };
 }

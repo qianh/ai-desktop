@@ -67,7 +67,7 @@ fn run() -> Result<(), String> {
     let mut synced = 0usize;
     for _ in 0..10 {
         thread::sleep(Duration::from_millis(300));
-        synced = sync_event_file(&store, &session_id, &event_file, None, None)?;
+        synced = sync_event_file(&store, &session_id, &event_file, None, None, None)?;
         if synced > 0 {
             break;
         }

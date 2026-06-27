@@ -19,7 +19,9 @@ import {
   buildInterceptsQueryParams,
   CONVERSATION_THREAD_MAX_ROWS,
   CONVERSATION_THREAD_PAGE_SIZE,
+  HYDRATE_IDS_BATCH_SIZE,
   conversationListQueryOptions,
+  urlOnlyListQueryOptions,
   type ConversationRecordsFilter,
   type InterceptsQueryOptions,
 } from "./lib/conversationRecordsQuery";
@@ -386,7 +388,7 @@ export type FilteredConversationResult = {
 
 const RAW_INTERCEPTS_FETCH_LIMIT = 1000;
 
-type ListFetchMode = "lean" | "legacy";
+type ListFetchMode = "lean" | "url-only" | "legacy";
 
 function listRowToIntercept(row: InterceptedFetch): InterceptedFetch {
   return {
@@ -461,9 +463,22 @@ async function fetchInterceptsFromSupabase(
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
+    const query = params.toString();
+    console.error(
+      `[appscope][supabase] intercepts query failed: status=${resp.status} queryLen=${query.length} detail=${text || "(empty)"}`,
+    );
     throw new Error(`Supabase ${resp.status}${text ? `: ${text}` : ""}`);
   }
   return (await resp.json()) as InterceptedFetch[];
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  if (size <= 0) return [items];
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
 }
 
 function filterConversationRows(rows: InterceptedFetch[]): InterceptedFetch[] {
@@ -504,11 +519,13 @@ async function hydrateServerFnRowBodies(
   if (needsBody.length === 0) return rows;
 
   const ids = needsBody.map((r) => r.id);
-  const withBodies = await fetchInterceptsFromSupabase(
-    buildInterceptsByIdsParams(ids),
-    config,
-    signal,
-  );
+  const withBodies = (
+    await Promise.all(
+      chunkArray(ids, HYDRATE_IDS_BATCH_SIZE).map((batch) =>
+        fetchInterceptsFromSupabase(buildInterceptsByIdsParams(batch), config, signal),
+      ),
+    )
+  ).flat();
   const byId = new Map(withBodies.map((r) => [r.id, listRowToIntercept(r)]));
   return rows.map((r) => {
     const full = byId.get(r.id);
@@ -532,12 +549,9 @@ async function hydrateServerFnRowBodies(
   });
 }
 
-function isLeanListSchemaError(error: unknown): boolean {
+function shouldFallbackFromLeanList(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  return (
-    /\bSupabase 400\b/.test(error.message) &&
-    /preview_text|is_conversation|conversation_id|column/i.test(error.message)
-  );
+  return /\bSupabase 400\b/.test(error.message);
 }
 
 function hasTimeFilter(filter: ConversationRecordsFilter): boolean {
@@ -549,15 +563,35 @@ async function loadInterceptRows(
   allPageIds: string[],
   config: SupabaseConfig,
   signal?: AbortSignal,
-  mode: ListFetchMode = "lean",
+  options: InterceptsQueryOptions | number = conversationListQueryOptions(
+    RAW_INTERCEPTS_FETCH_LIMIT,
+  ),
 ): Promise<InterceptedFetch[]> {
-  const options: InterceptsQueryOptions | number =
-    mode === "lean"
-      ? conversationListQueryOptions(RAW_INTERCEPTS_FETCH_LIMIT)
-      : RAW_INTERCEPTS_FETCH_LIMIT;
   const params = buildInterceptsQueryParams(filter, allPageIds, options);
   const rows = await fetchInterceptsFromSupabase(params, config, signal);
   return rows.map(listRowToIntercept);
+}
+
+async function tryFallbackTiers(
+  filter: ConversationRecordsFilter,
+  allPageIds: string[],
+  config: SupabaseConfig,
+  signal?: AbortSignal,
+): Promise<{ rows: InterceptedFetch[]; mode: ListFetchMode }> {
+  try {
+    const rows = await loadInterceptRows(
+      filter,
+      allPageIds,
+      config,
+      signal,
+      urlOnlyListQueryOptions(RAW_INTERCEPTS_FETCH_LIMIT),
+    );
+    if (rows.length > 0) return { rows, mode: "url-only" };
+  } catch (e) {
+    if (!shouldFallbackFromLeanList(e)) throw e;
+  }
+  const rows = await loadInterceptRows(filter, allPageIds, config, signal, RAW_INTERCEPTS_FETCH_LIMIT);
+  return { rows, mode: "legacy" };
 }
 
 async function loadConversationListRows(
@@ -567,19 +601,19 @@ async function loadConversationListRows(
   signal?: AbortSignal,
 ): Promise<{ rows: InterceptedFetch[]; mode: ListFetchMode }> {
   try {
-    const rows = await loadInterceptRows(filter, allPageIds, config, signal, "lean");
+    const rows = await loadInterceptRows(
+      filter,
+      allPageIds,
+      config,
+      signal,
+      conversationListQueryOptions(RAW_INTERCEPTS_FETCH_LIMIT),
+    );
     if (rows.length > 0) return { rows, mode: "lean" };
-    if (!hasTimeFilter(filter)) {
-      const legacy = await loadInterceptRows(filter, allPageIds, config, signal, "legacy");
-      if (legacy.length > 0) return { rows: legacy, mode: "legacy" };
-    }
+    if (!hasTimeFilter(filter)) return tryFallbackTiers(filter, allPageIds, config, signal);
     return { rows, mode: "lean" };
   } catch (error) {
-    if (isLeanListSchemaError(error)) {
-      const legacy = await loadInterceptRows(filter, allPageIds, config, signal, "legacy");
-      return { rows: legacy, mode: "legacy" };
-    }
-    throw error;
+    if (!shouldFallbackFromLeanList(error)) throw error;
+    return tryFallbackTiers(filter, allPageIds, config, signal);
   }
 }
 

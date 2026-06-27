@@ -341,9 +341,7 @@ fn make_intercept_script(page_id: &str, _proxy_port: u16) -> String {
         var init = args[1] || {{}};
         var url = typeof input === 'string' ? input : (input && input.url ? input.url : String(input));
 
-        if (url.indexOf('/__appscope_intercept__') !== -1
-            || url.indexOf('/__intercept__') !== -1
-            || url.indexOf('appscope.local') !== -1) {{
+        if (shouldBypassIntercept(url)) {{
             return originalFetch.apply(this, args);
         }}
 
@@ -421,6 +419,94 @@ fn make_intercept_script(page_id: &str, _proxy_port: u16) -> String {
             throw err;
         }}
     }};
+
+    function shouldBypassIntercept(url) {{
+        return url.indexOf('/__appscope_intercept__') !== -1
+            || url.indexOf('/__intercept__') !== -1
+            || url.indexOf('appscope.local') !== -1;
+    }}
+
+    function recordInterceptItem(item) {{
+        pending.push(item);
+    }}
+
+    function buildInterceptItem(startTime, url, method, reqHeaders, reqBody, status, respHeaders, respBody, duration, error) {{
+        return {{
+            id: genId(), timestamp: startTime, url: url, method: method,
+            req_headers: reqHeaders, req_body: reqBody,
+            status: status, resp_headers: respHeaders,
+            resp_body: respBody, duration_ms: duration,
+            error: error
+        }};
+    }}
+
+    var originalXhrOpen = XMLHttpRequest.prototype.open;
+    var originalXhrSend = XMLHttpRequest.prototype.send;
+    var originalSetRequestHeader = XMLHttpRequest.prototype.setRequestHeader;
+
+    XMLHttpRequest.prototype.open = function(method, url) {{
+        this.__appscope_method = method;
+        this.__appscope_url = typeof url === 'string' ? url : String(url);
+        this.__appscope_req_headers = {{}};
+        return originalXhrOpen.apply(this, arguments);
+    }};
+
+    XMLHttpRequest.prototype.setRequestHeader = function(name, value) {{
+        if (this.__appscope_req_headers) {{
+            this.__appscope_req_headers[name] = value;
+        }}
+        return originalSetRequestHeader.apply(this, arguments);
+    }};
+
+    XMLHttpRequest.prototype.send = function(body) {{
+        var xhr = this;
+        var method = (xhr.__appscope_method || 'GET').toUpperCase();
+        var url = String(xhr.__appscope_url || '');
+        var startTime = Date.now();
+        var reqBody = safeBodyText(body);
+        var reqHeaders = xhr.__appscope_req_headers || {{}};
+
+        if (!shouldBypassIntercept(url)) {{
+            xhr.addEventListener('loadend', function() {{
+                var respHeaders = {{}};
+                try {{
+                    var raw = xhr.getAllResponseHeaders() || '';
+                    raw.trim().split(/[\\r\\n]+/).forEach(function(line) {{
+                        var parts = line.split(': ');
+                        if (parts.length >= 2) {{
+                            respHeaders[parts[0]] = parts.slice(1).join(': ');
+                        }}
+                    }});
+                }} catch(e) {{}}
+
+                var respBody = null;
+                try {{
+                    var contentType = (xhr.getResponseHeader('content-type') || '').toLowerCase();
+                    var bodyLimit = (contentType.includes('application/json') || contentType === '')
+                        ? MAX_BODY_SIZE_JSON
+                        : MAX_BODY_SIZE;
+                    respBody = sanitizeBodyText(truncate(xhr.responseText || '', bodyLimit));
+                }} catch(e) {{
+                    respBody = '[read error: ' + e.message + ']';
+                }}
+
+                recordInterceptItem(buildInterceptItem(
+                    startTime,
+                    url,
+                    method,
+                    reqHeaders,
+                    reqBody,
+                    xhr.status || 0,
+                    respHeaders,
+                    respBody,
+                    Date.now() - startTime,
+                    undefined
+                ));
+            }});
+        }}
+
+        return originalXhrSend.apply(this, arguments);
+    }};
 }})();
 "#,
         page_id = page_id.replace('\'', "\\'")
@@ -485,6 +571,13 @@ mod tests {
         let script = super::make_intercept_script("test", 8080);
         assert!(script.contains("text/event-stream"));
         assert!(script.contains("getReader"));
+    }
+
+    #[test]
+    fn intercept_script_hooks_xmlhttprequest() {
+        let script = super::make_intercept_script("test", 8080);
+        assert!(script.contains("XMLHttpRequest.prototype.open"));
+        assert!(script.contains("XMLHttpRequest.prototype.send"));
     }
 
     #[test]

@@ -13,6 +13,8 @@ import {
   INTERCEPTS_LIST_SELECT,
   INTERCEPTS_METADATA_SELECT,
   conversationListQueryOptions,
+  INTERCEPTS_LEGACY_BODY_SELECT,
+  urlOnlyListQueryOptions,
   msToDatetimeLocal,
   NOISE_URL_NOT_OR_VALUE,
   quotePostgrestId,
@@ -57,6 +59,18 @@ describe("buildInterceptsQueryParams", () => {
 
   it("escapes quotes inside page ids", () => {
     expect(quotePostgrestId('a"b')).toBe('"a\\"b"');
+  });
+
+  it("urlOnlyListQueryOptions uses body select and strict URL filter without indexed columns", () => {
+    const params = buildInterceptsQueryParams(
+      { pageId: "p1", timeFromMs: null, timeToMs: null },
+      ["p1"],
+      urlOnlyListQueryOptions(500),
+    );
+    expect(params.get("select")).toBe(INTERCEPTS_LEGACY_BODY_SELECT);
+    expect(params.get("or")).toContain("backend-api/conversation");
+    expect(params.get("or")).not.toContain("is_conversation");
+    expect(params.get("method")).toBe("in.(GET,POST)");
   });
 
   it("conversationListQueryOptions uses lean select and session list or filter", () => {

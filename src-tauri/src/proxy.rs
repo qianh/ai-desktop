@@ -5,6 +5,7 @@ use crate::paths::AppScopePaths;
 use crate::store::FlowStore;
 use chrono::Utc;
 use serde::Deserialize;
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader, Write};
 use tauri::{AppHandle, Emitter};
 use std::net::TcpListener;
@@ -42,6 +43,7 @@ pub struct ProxyFlowEvent {
     pub resp_size: Option<i64>,
     pub timing: Option<serde_json::Value>,
     pub error: Option<String>,
+    pub timestamp_ms: Option<i64>,
 }
 
 pub fn find_mitmdump() -> Result<PathBuf, String> {
@@ -223,9 +225,126 @@ pub fn flow_event_to_flow(event: &ProxyFlowEvent, session_id: &str) -> Flow {
     }
 }
 
-fn count_physical_lines(event_file: &Path) -> Result<usize, String> {
-    let file = std::fs::File::open(event_file).map_err(|e| e.to_string())?;
-    Ok(BufReader::new(file).lines().count())
+fn headers_vec_to_map(headers: &[HeaderPair]) -> serde_json::Map<String, serde_json::Value> {
+    headers
+        .iter()
+        .map(|h| (h.name.clone(), serde_json::Value::String(h.value.clone())))
+        .collect()
+}
+
+/// Mirrors the TypeScript `isConversationUrlCandidate` / `isConversationGetLoadRow` gates.
+pub fn is_flow_conversation_candidate(method: &str, url: &str, path: &str) -> bool {
+    let path_lower = path.to_lowercase();
+    let url_lower = url.to_lowercase();
+
+    const NOISE: &[&str] = &[
+        "/ces/",
+        "/rgstr/",
+        "/v1/metrics",
+        "sentry",
+        "/stream_status",
+        "/init",
+        "/conversation/prepare",
+        "/beacons/",
+        "analytics",
+    ];
+    if NOISE.iter().any(|needle| url_lower.contains(needle)) {
+        return false;
+    }
+
+    if path_lower.ends_with("/conversations") || path_lower.ends_with("/conversations/") {
+        return false;
+    }
+
+    if method.eq_ignore_ascii_case("POST") {
+        for suffix in [
+            "/backend-api/conversation",
+            "/backend-anon/conversation",
+            "/api/conversation",
+            "/api/chat",
+        ] {
+            if path_lower.ends_with(suffix) || path_lower.ends_with(&format!("{suffix}/")) {
+                return true;
+            }
+        }
+    }
+
+    if method.eq_ignore_ascii_case("GET") {
+        if let Some(rest) = path_lower.strip_prefix("/backend-api/conversation/") {
+            let uuid_part = rest.trim_end_matches('/');
+            let dash_count = uuid_part.chars().filter(|c| *c == '-').count();
+            if uuid_part.len() == 36 && dash_count == 4 {
+                return true;
+            }
+        }
+    }
+
+    if path_lower.contains("/_serverfn/") {
+        return true;
+    }
+
+    false
+}
+
+pub fn flow_event_to_intercept_item(event: &ProxyFlowEvent) -> serde_json::Value {
+    let id = event
+        .id
+        .clone()
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "unknown".into());
+    let timestamp = event
+        .timestamp_ms
+        .unwrap_or_else(|| Utc::now().timestamp_millis());
+    serde_json::json!({
+        "id": id,
+        "timestamp": timestamp,
+        "url": event.url,
+        "method": event.method,
+        "req_headers": headers_vec_to_map(&event.req_headers),
+        "req_body": event.req_body_preview,
+        "status": event.status_code.unwrap_or(0),
+        "resp_headers": headers_vec_to_map(&event.resp_headers),
+        "resp_body": event.resp_body_preview,
+        "duration_ms": event.duration_ms.unwrap_or(0),
+        "error": event.error,
+    })
+}
+
+pub fn try_build_flow_intercept_payload(
+    event: &ProxyFlowEvent,
+    session_id: &str,
+    page_id: &str,
+    reporting_enabled: bool,
+    emitted_flow_ids: &mut HashSet<String>,
+) -> Option<serde_json::Value> {
+    if !reporting_enabled || page_id.is_empty() {
+        return None;
+    }
+    if !is_flow_conversation_candidate(&event.method, &event.url, &event.path) {
+        return None;
+    }
+
+    let flow_id = flow_event_id(event, session_id);
+    if !emitted_flow_ids.insert(flow_id) {
+        return None;
+    }
+
+    Some(serde_json::json!({
+        "page_id": page_id,
+        "items": [flow_event_to_intercept_item(event)],
+    }))
+}
+
+fn page_reporting_enabled(store: &FlowStore, page_id: &str) -> bool {
+    if page_id.is_empty() {
+        return false;
+    }
+    store
+        .get_page(page_id)
+        .ok()
+        .flatten()
+        .map(|page| page.intercept_reporting_enabled || is_default_chat_page(&page.url))
+        .unwrap_or(false)
 }
 
 pub fn sync_event_file(
@@ -234,26 +353,41 @@ pub fn sync_event_file(
     event_file: &Path,
     app: Option<&AppHandle>,
     mut intercept_line_cursor: Option<&mut usize>,
+    mut emitted_flow_ids: Option<&mut HashSet<String>>,
 ) -> Result<usize, String> {
     if !event_file.exists() {
         return Ok(0);
     }
 
+    let file = std::fs::File::open(event_file).map_err(|e| e.to_string())?;
+    let all_lines: Vec<String> = BufReader::new(file)
+        .lines()
+        .collect::<Result<_, _>>()
+        .map_err(|e| e.to_string())?;
+
     if let Some(cursor) = intercept_line_cursor.as_deref_mut() {
-        let total_lines = count_physical_lines(event_file)?;
-        if *cursor > total_lines {
+        if *cursor > all_lines.len() {
             *cursor = 0;
         }
     }
 
-    let file = std::fs::File::open(event_file).map_err(|e| e.to_string())?;
-    let reader = BufReader::new(file);
-    let mut count = 0usize;
-    let mut physical_line = 0usize;
+    // Resolve session page once — constant for the duration of this call.
+    let flow_page_id = if app.is_some() && emitted_flow_ids.is_some() {
+        store
+            .get_session(session_id)
+            .ok()
+            .flatten()
+            .map(|s| s.target_id)
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let flow_reporting_enabled = page_reporting_enabled(store, &flow_page_id);
 
-    for line in reader.lines() {
-        physical_line += 1;
-        let line = line.map_err(|e| e.to_string())?;
+    let mut count = 0usize;
+
+    for (idx, line) in all_lines.iter().enumerate() {
+        let physical_line = idx + 1;
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
@@ -270,19 +404,7 @@ pub fn sync_event_file(
             if emit {
                 if let Some(app) = app {
                     let page_id = raw.get("page_id").and_then(|v| v.as_str()).unwrap_or("");
-                    let reporting_enabled = if page_id.is_empty() {
-                        false
-                    } else {
-                        store
-                            .get_page(page_id)
-                            .ok()
-                            .flatten()
-                            .map(|page| {
-                                page.intercept_reporting_enabled || is_default_chat_page(&page.url)
-                            })
-                            .unwrap_or(false)
-                    };
-                    if reporting_enabled {
+                    if page_reporting_enabled(store, page_id) {
                         let items_json =
                             raw.get("items_json").and_then(|v| v.as_str()).unwrap_or("[]");
                         if let Ok(items) =
@@ -311,6 +433,19 @@ pub fn sync_event_file(
         let event = parse_flow_event_json(trimmed)?;
         let flow = flow_event_to_flow(&event, session_id);
         store.insert_flow(&flow)?;
+
+        if let (Some(app), Some(emitted)) = (app, emitted_flow_ids.as_deref_mut()) {
+            if let Some(payload) = try_build_flow_intercept_payload(
+                &event,
+                session_id,
+                &flow_page_id,
+                flow_reporting_enabled,
+                emitted,
+            ) {
+                let _ = app.emit("page-content-intercept", payload);
+            }
+        }
+
         count += 1;
     }
 
@@ -360,6 +495,22 @@ def _header_pairs(headers):
         pairs.append({"name": name, "value": value, "sensitive": sensitive})
     return pairs
 
+DEFAULT_BODY_LIMIT = 2000
+CONVERSATION_BODY_LIMIT = 50000
+
+def _body_limit(path):
+    path_lower = path.split("?")[0].lower()
+    if (
+        path_lower.endswith("/api/chat")
+        or path_lower.endswith("/api/chat/")
+        or "/backend-api/conversation" in path_lower
+        or "/backend-anon/conversation" in path_lower
+        or "/api/conversation" in path_lower
+        or "/_serverfn/" in path_lower
+    ):
+        return CONVERSATION_BODY_LIMIT
+    return DEFAULT_BODY_LIMIT
+
 def _is_intercept_drain(flow):
     path = flow.request.path.split("?")[0].rstrip("/")
     if path in ("/__intercept__", "/__appscope_intercept__"):
@@ -406,6 +557,9 @@ def response(flow: http.HTTPFlow):
     event_id = hashlib.sha256(
         f"{req.timestamp_start}:{req.method}:{req.pretty_url}:{resp.status_code}".encode()
     ).hexdigest()[:16]
+    body_limit = _body_limit(req.path)
+    req_text = req.get_text(strict=False) if req.raw_content else None
+    resp_text = resp.get_text(strict=False) if resp.raw_content else None
     event = {
         "id": event_id,
         "method": req.method,
@@ -416,14 +570,15 @@ def response(flow: http.HTTPFlow):
         "status_code": resp.status_code,
         "req_headers": _header_pairs(req.headers),
         "resp_headers": _header_pairs(resp.headers),
-        "req_body_preview": req.get_text(strict=False)[:2000] if req.raw_content else None,
-        "resp_body_preview": resp.get_text(strict=False)[:2000] if resp.raw_content else None,
+        "req_body_preview": req_text[:body_limit] if req_text else None,
+        "resp_body_preview": resp_text[:body_limit] if resp_text else None,
         "mime": resp.headers.get("content-type"),
         "duration_ms": int((resp.timestamp_end - req.timestamp_start) * 1000) if resp.timestamp_end and req.timestamp_start else None,
         "req_size": len(req.raw_content) if req.raw_content else 0,
         "resp_size": len(resp.raw_content) if resp.raw_content else 0,
         "timing": None,
         "error": None,
+        "timestamp_ms": int(req.timestamp_start * 1000) if req.timestamp_start else None,
     }
     with open(EVENT_FILE, "a", encoding="utf-8") as f:
         f.write(json.dumps(event) + "\n")
@@ -484,8 +639,8 @@ mod tests {
         let line = r#"{"id":"flow-stable-1","method":"GET","url":"http://127.0.0.1:8080/","scheme":"http","host":"127.0.0.1","path":"/","status_code":200,"req_headers":[],"resp_headers":[]}"#;
         std::fs::write(&event_file, format!("{line}\n")).unwrap();
 
-        sync_event_file(&store, session_id, &event_file, None, None).unwrap();
-        sync_event_file(&store, session_id, &event_file, None, None).unwrap();
+        sync_event_file(&store, session_id, &event_file, None, None, None).unwrap();
+        sync_event_file(&store, session_id, &event_file, None, None, None).unwrap();
         let flows = store.list_flows(session_id).unwrap();
         assert_eq!(flows.len(), 1);
         assert_eq!(flows[0].id, "flow-stable-1");
@@ -523,6 +678,7 @@ mod tests {
             &event_file,
             None,
             Some(&mut cursor),
+            None,
         )
         .unwrap();
         assert_eq!(count, 1);
@@ -542,7 +698,8 @@ mod tests {
         let mut cursor = 5000usize;
 
         let count =
-            sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor)).unwrap();
+            sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor), None)
+                .unwrap();
         assert_eq!(count, 1);
         assert_eq!(cursor, 1);
     }
@@ -559,7 +716,7 @@ mod tests {
         let session_id = "sess-intercept";
         let mut cursor = 0usize;
 
-        sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor)).unwrap();
+        sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor), None).unwrap();
         assert_eq!(cursor, 1);
 
         std::fs::write(
@@ -568,7 +725,8 @@ mod tests {
         )
         .unwrap();
         let count =
-            sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor)).unwrap();
+            sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor), None)
+                .unwrap();
         assert_eq!(count, 2);
         assert_eq!(cursor, 2);
     }
@@ -599,11 +757,77 @@ mod tests {
         let line = r#"{"method":"GET","url":"http://127.0.0.1:8080/","scheme":"http","host":"127.0.0.1","path":"/","status_code":200,"req_headers":[],"resp_headers":[],"resp_body_preview":"ok"}"#;
         std::fs::write(&event_file, format!("{line}\n")).unwrap();
 
-        let count = sync_event_file(&store, session_id, &event_file, None, None).unwrap();
+        let count = sync_event_file(&store, session_id, &event_file, None, None, None).unwrap();
         assert_eq!(count, 1);
         let flows = store.list_flows(session_id).unwrap();
         assert_eq!(flows.len(), 1);
         assert_eq!(flows[0].method, "GET");
+    }
+
+    #[test]
+    fn is_flow_conversation_candidate_matches_api_chat_post() {
+        assert!(is_flow_conversation_candidate(
+            "POST",
+            "https://chat.worldwide-logistics.cn/api/chat",
+            "/api/chat"
+        ));
+    }
+
+    #[test]
+    fn is_flow_conversation_candidate_rejects_analytics() {
+        assert!(!is_flow_conversation_candidate(
+            "POST",
+            "https://chatgpt.com/ces/v1/t",
+            "/ces/v1/t"
+        ));
+    }
+
+    #[test]
+    fn try_build_flow_intercept_payload_dedupes_flow_ids() {
+        let event = ProxyFlowEvent {
+            id: Some("flow-chat-1".into()),
+            method: "POST".into(),
+            url: "https://chat.worldwide-logistics.cn/api/chat".into(),
+            scheme: "https".into(),
+            host: "chat.worldwide-logistics.cn".into(),
+            path: "/api/chat".into(),
+            status_code: Some(200),
+            req_headers: vec![],
+            resp_headers: vec![],
+            req_body_preview: Some(r#"{"messages":[{"role":"user","content":"hi"}]}"#.into()),
+            resp_body_preview: Some("data: {}\n\n".into()),
+            mime: Some("text/event-stream".into()),
+            duration_ms: Some(1200),
+            req_size: Some(42),
+            resp_size: Some(100),
+            timing: None,
+            error: None,
+            timestamp_ms: Some(1_700_000_000_000),
+        };
+        let mut emitted = HashSet::new();
+        let first = try_build_flow_intercept_payload(
+            &event,
+            "sess-1",
+            "page-1",
+            true,
+            &mut emitted,
+        );
+        let second = try_build_flow_intercept_payload(
+            &event,
+            "sess-1",
+            "page-1",
+            true,
+            &mut emitted,
+        );
+        assert!(first.is_some());
+        assert!(second.is_none());
+        let payload = first.unwrap();
+        assert_eq!(payload["page_id"], "page-1");
+        assert_eq!(payload["items"][0]["url"], event.url);
+        assert_eq!(
+            payload["items"][0]["req_body"].as_str(),
+            event.req_body_preview.as_deref()
+        );
     }
 
     #[test]

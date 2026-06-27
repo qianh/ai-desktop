@@ -210,6 +210,94 @@ describe("fetchFilteredConversationIntercepts", () => {
     expect(result.rows[0].resp_body).toContain("SSD健康状态分析");
   });
 
+  it("hydrates /_serverFn rows in batches to avoid oversized id=in URLs", async () => {
+    const calls: string[] = [];
+    const serverFnIds = Array.from({ length: 120 }, (_, i) => `srv-${i}`);
+    mockFetch((url) => {
+      calls.push(decodeURIComponent(url));
+      if (url.includes("id=in.")) {
+        const match = url.match(/id=in\.\((.*)\)/);
+        const count = match ? match[1].split(",").length : 0;
+        expect(count).toBeLessThanOrEqual(50);
+        return jsonResponse(
+          serverFnIds.slice(0, count).map((id, index) => ({
+            id,
+            timestamp: 100 + index,
+            url: "/_serverFn/abc",
+            method: "GET",
+            page_id: "p1",
+            req_body: null,
+            resp_body:
+              '{"k":["id","userId","title"],"v":[{"t":1,"s":"chat-1"},{"t":1,"s":"u1"},{"t":1,"s":"标题' +
+              index +
+              '"}]}',
+            preview_text: null,
+            is_conversation: false,
+            conversation_id: null,
+          })),
+        );
+      }
+      return jsonResponse(
+        serverFnIds.map((id, index) => ({
+          id,
+          timestamp: 100 + index,
+          url: "/_serverFn/abc",
+          method: "GET",
+          page_id: "p1",
+          preview_text: null,
+          is_conversation: false,
+          conversation_id: null,
+        })),
+      );
+    });
+
+    const result = await fetchFilteredConversationIntercepts(
+      { pageId: "p1", timeFromMs: null, timeToMs: null },
+      ["p1"],
+      config,
+    );
+
+    expect(calls.filter((u) => u.includes("id=in.")).length).toBe(3);
+    expect(result.rows.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it("falls back to URL-only query when lean list returns generic Bad Request", async () => {
+    const calls: string[] = [];
+    let attempt = 0;
+    mockFetch((url) => {
+      calls.push(decodeURIComponent(url));
+      attempt += 1;
+      if (attempt === 1) {
+        return jsonResponse("Bad Request", 400);
+      }
+      return jsonResponse([
+        {
+          id: "legacy-1",
+          timestamp: 100,
+          url: "https://chatgpt.com/backend-api/conversation",
+          method: "POST",
+          page_id: "p1",
+          req_body: JSON.stringify({
+            messages: [{ role: "user", content: { parts: ["hello"] } }],
+          }),
+          resp_body: 'data: {"message":{"content":{"parts":["hi"]}}}',
+        },
+      ]);
+    });
+
+    const result = await fetchFilteredConversationIntercepts(
+      { pageId: "p1", timeFromMs: null, timeToMs: null },
+      ["p1"],
+      config,
+    );
+
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls[0]).toContain(`or=${SESSION_LIST_OR_VALUE}`);
+    expect(calls[1]).not.toContain("is_conversation.eq.true");
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].id).toBe("legacy-1");
+  });
+
   it("falls back to per-page eq queries when bulk query returns 400", async () => {
     const calls: string[] = [];
     mockFetch((url) => {
