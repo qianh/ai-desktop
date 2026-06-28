@@ -5,8 +5,8 @@ import {
   buildInterceptsByIdsParams,
   buildInterceptsQueryParams,
   CONVERSATION_URL_OR_VALUE,
-  SESSION_LIST_OR_VALUE,
-  datetimeLocalToMs,
+  dateInputToEndOfDayMs,
+  dateInputToStartOfDayMs,
   defaultPastWeekRange,
   draftToFilter,
   filterCacheKey,
@@ -15,7 +15,7 @@ import {
   conversationListQueryOptions,
   INTERCEPTS_LEGACY_BODY_SELECT,
   urlOnlyListQueryOptions,
-  msToDatetimeLocal,
+  msToDateInput,
   NOISE_URL_NOT_OR_VALUE,
   quotePostgrestId,
   validateTimeRange,
@@ -37,14 +37,14 @@ import {
 import type { InterceptedFetch } from "../types";
 
 describe("buildInterceptsQueryParams", () => {
-  it("filters by single page; time range is applied client-side", () => {
+  it("pushes page and time filters into PostgREST params", () => {
     const params = buildInterceptsQueryParams(
       { pageId: "p1", timeFromMs: 1000, timeToMs: 2000 },
       ["p1", "p2"],
       200,
     );
     expect(params.get("page_id")).toBe("eq.p1");
-    expect(params.getAll("timestamp")).toEqual([]);
+    expect(params.getAll("timestamp")).toEqual(["gte.1000", "lte.2000"]);
     expect(params.get("limit")).toBe("200");
   });
 
@@ -73,17 +73,17 @@ describe("buildInterceptsQueryParams", () => {
     expect(params.get("method")).toBe("in.(GET,POST)");
   });
 
-  it("conversationListQueryOptions uses lean select and session list or filter", () => {
+  it("conversationListQueryOptions uses lean select and indexed conversation filter", () => {
     const params = buildInterceptsQueryParams(
       { pageId: "p1", timeFromMs: null, timeToMs: null },
       ["p1"],
       conversationListQueryOptions(500),
     );
     expect(params.get("select")).toBe(INTERCEPTS_LIST_SELECT);
-    expect(params.get("or")).toBe(SESSION_LIST_OR_VALUE);
-    expect(params.get("not.or")).toBe(NOISE_URL_NOT_OR_VALUE);
+    expect(params.get("or")).toBeNull();
+    expect(params.get("not.or")).toBeNull();
     expect(params.get("method")).toBe("in.(GET,POST)");
-    expect(params.get("is_conversation")).toBeNull();
+    expect(params.get("is_conversation")).toBe("eq.true");
     expect(params.get("limit")).toBe("500");
   });
 
@@ -706,34 +706,42 @@ describe("NOISE_URL_NOT_OR_VALUE", () => {
 
 describe("validateTimeRange", () => {
   it("rejects inverted range", () => {
-    expect(validateTimeRange("2026-06-23T12:00", "2026-06-22T12:00")).toBe("结束时间不能早于开始时间");
+    expect(validateTimeRange("2026-06-23", "2026-06-22")).toBe("结束日期不能早于开始日期");
   });
 
   it("accepts valid or partial range", () => {
-    expect(validateTimeRange("2026-06-22T12:00", "2026-06-23T12:00")).toBeNull();
-    expect(validateTimeRange("", "2026-06-23T12:00")).toBeNull();
+    expect(validateTimeRange("2026-06-22", "2026-06-23")).toBeNull();
+    expect(validateTimeRange("", "2026-06-23")).toBeNull();
   });
 });
 
-describe("datetimeLocalToMs / msToDatetimeLocal", () => {
-  it("round-trips through local datetime input", () => {
-    const ms = datetimeLocalToMs("2026-06-23T15:30");
-    expect(ms).not.toBeNull();
-    expect(msToDatetimeLocal(ms!)).toBe("2026-06-23T15:30");
+describe("date input conversion", () => {
+  it("maps date-only input to local day boundaries", () => {
+    const start = dateInputToStartOfDayMs("2026-06-23");
+    const end = dateInputToEndOfDayMs("2026-06-23");
+
+    expect(start).toBe(new Date(2026, 5, 23, 0, 0, 0, 0).getTime());
+    expect(end).toBe(new Date(2026, 5, 23, 23, 59, 59, 999).getTime());
+    expect(msToDateInput(start!)).toBe("2026-06-23");
   });
 
   it("returns null for empty input", () => {
-    expect(datetimeLocalToMs("")).toBeNull();
+    expect(dateInputToStartOfDayMs("")).toBeNull();
+    expect(dateInputToEndOfDayMs("")).toBeNull();
   });
 });
 
 describe("defaultPastWeekRange", () => {
-  it("spans seven days ending at now", () => {
+  it("spans seven calendar days ending today", () => {
     const now = new Date("2026-06-23T12:30:00").getTime();
     const { from, to } = defaultPastWeekRange(now);
-    expect(to).toBe("2026-06-23T12:30");
-    expect(from).toBe("2026-06-16T12:30");
-    expect(draftToFilter(null, from, to).timeFromMs).toBe(datetimeLocalToMs(from));
+    expect(to).toBe("2026-06-23");
+    expect(from).toBe("2026-06-16");
+    expect(draftToFilter(null, from, to)).toEqual({
+      pageId: null,
+      timeFromMs: new Date(2026, 5, 16, 0, 0, 0, 0).getTime(),
+      timeToMs: new Date(2026, 5, 23, 23, 59, 59, 999).getTime(),
+    });
   });
 });
 

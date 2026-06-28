@@ -15,13 +15,13 @@ use commands::{
     remove_certificate, remove_page, save_page, set_page_intercept_reporting, stop_session,
 };
 use page_webview::{
-    close_page_webview, get_page_webview_url, mount_page_webview, set_page_webview_visible,
-    sync_page_webview_bounds,
+    close_page_webview, get_page_webview_url, mount_page_webview, open_main_devtools,
+    open_page_webview_devtools, set_page_webview_visible, sync_page_webview_bounds,
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             save_page,
             list_pages,
@@ -39,10 +39,22 @@ pub fn run() {
             remove_certificate,
             mount_page_webview,
             get_page_webview_url,
+            open_page_webview_devtools,
+            open_main_devtools,
             close_page_webview,
             set_page_webview_visible,
             sync_page_webview_bounds,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running AppScope");
+        .build(tauri::generate_context!())
+        .expect("error while building AppScope");
+
+    app.run(|_, event| match event {
+        tauri::RunEvent::WindowEvent {
+            event: tauri::WindowEvent::CloseRequested { .. },
+            ..
+        }
+        | tauri::RunEvent::ExitRequested { .. }
+        | tauri::RunEvent::Exit => commands::stop_all_capture_sessions(),
+        _ => {}
+    });
 }

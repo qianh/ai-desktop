@@ -9,10 +9,7 @@ pub fn normalize_page_url(url: &str) -> String {
                 "{}{}{}",
                 parsed.origin().ascii_serialization(),
                 path,
-                parsed
-                    .query()
-                    .map(|q| format!("?{q}"))
-                    .unwrap_or_default()
+                parsed.query().map(|q| format!("?{q}")).unwrap_or_default()
             )
         }
         Err(_) => url.trim().trim_end_matches('/').to_string(),
@@ -29,7 +26,11 @@ mod tests {
 
     #[test]
     fn recognizes_default_chat_url_variants() {
-        assert!(is_default_chat_page("https://chat.worldwide-logistics.cn/chat"));
-        assert!(is_default_chat_page("https://chat.worldwide-logistics.cn/chat/"));
+        assert!(is_default_chat_page(
+            "https://chat.worldwide-logistics.cn/chat"
+        ));
+        assert!(is_default_chat_page(
+            "https://chat.worldwide-logistics.cn/chat/"
+        ));
     }
 }

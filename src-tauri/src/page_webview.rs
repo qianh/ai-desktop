@@ -1,7 +1,7 @@
+use tauri::webview::Color;
 use tauri::webview::WebviewBuilder;
 use tauri::Emitter;
 use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl};
-use tauri::webview::Color;
 
 const PAGE_WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 
@@ -78,13 +78,7 @@ pub fn sanitize_webview_label(page_id: &str) -> String {
     label
 }
 
-fn emit_page_load(
-    app: &AppHandle,
-    page_id: &str,
-    label: &str,
-    event: &str,
-    url: &str,
-) {
+fn emit_page_load(app: &AppHandle, page_id: &str, label: &str, event: &str, url: &str) {
     let _ = app.emit(
         "page-webview-load",
         PageWebviewLoadEvent {
@@ -132,6 +126,7 @@ pub fn mount_page_webview(
 
     let mut builder = WebviewBuilder::new(&label, WebviewUrl::External(target.clone()))
         .user_agent(PAGE_WEBVIEW_USER_AGENT)
+        .devtools(true)
         .background_color(Color(255, 255, 255, 255))
         .data_store_identifier(page_id_to_data_store_uuid(&page_id));
     if proxy_port > 0 {
@@ -139,14 +134,10 @@ pub fn mount_page_webview(
             .map_err(|e| format!("invalid proxy url: {e}"))?;
         builder = builder.proxy_url(proxy);
     }
-    let mut builder = builder
-        .focused(true)
-        .zoom_hotkeys_enabled(true);
-    if let Some(intercept_script) = intercept_script_if_enabled(
-        intercept_reporting_enabled,
-        &page_id,
-        proxy_port,
-    ) {
+    let mut builder = builder.focused(true).zoom_hotkeys_enabled(true);
+    if let Some(intercept_script) =
+        intercept_script_if_enabled(intercept_reporting_enabled, &page_id, proxy_port)
+    {
         builder = builder.initialization_script(&intercept_script);
     }
     let builder = builder
@@ -213,7 +204,30 @@ pub fn get_page_webview_url(app: AppHandle, page_id: String) -> Result<Option<St
 }
 
 #[tauri::command]
-pub fn set_page_webview_visible(app: AppHandle, page_id: String, visible: bool) -> Result<(), String> {
+pub fn open_page_webview_devtools(app: AppHandle, page_id: String) -> Result<(), String> {
+    let label = sanitize_webview_label(&page_id);
+    let webview = app
+        .get_webview(&label)
+        .ok_or_else(|| format!("page webview not found: {label}"))?;
+    webview.open_devtools();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_main_devtools(app: AppHandle) -> Result<(), String> {
+    let webview = app
+        .get_webview("main")
+        .ok_or_else(|| "main webview not found".to_string())?;
+    webview.open_devtools();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_page_webview_visible(
+    app: AppHandle,
+    page_id: String,
+    visible: bool,
+) -> Result<(), String> {
     let label = sanitize_webview_label(&page_id);
     if let Some(webview) = app.get_webview(&label) {
         if visible {
@@ -254,7 +268,6 @@ pub fn sync_page_webview_bounds(
         .map_err(|e| e.to_string())?;
     Ok(())
 }
-
 
 fn make_intercept_script(page_id: &str, _proxy_port: u16) -> String {
     format!(
@@ -515,8 +528,8 @@ fn make_intercept_script(page_id: &str, _proxy_port: u16) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::sanitize_webview_label;
     use super::page_id_to_data_store_uuid;
+    use super::sanitize_webview_label;
 
     #[test]
     fn data_store_uuid_returns_uuid_bytes_for_valid_uuid() {

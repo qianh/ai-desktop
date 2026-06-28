@@ -18,6 +18,8 @@ export default function TitleBar({
   onToggleInspector,
   onOpenSessionRecords,
   sessionRecordsActive,
+  onOpenDevtools,
+  canInspectPage,
 }: {
   titleSuffix: string;
   variant: "A" | "B";
@@ -26,6 +28,8 @@ export default function TitleBar({
   onToggleInspector: () => void;
   onOpenSessionRecords: () => void;
   sessionRecordsActive: boolean;
+  onOpenDevtools: () => void;
+  canInspectPage: boolean;
 }) {
   return (
     <div
@@ -51,6 +55,17 @@ export default function TitleBar({
         <span style={{ fontSize: 12.5, color: "var(--c-text-4)" }}>— {titleSuffix}</span>
       </div>
       <div data-tauri-no-drag style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          onClick={onOpenDevtools}
+          title={
+            canInspectPage
+              ? "打开当前页面 Web Inspector (⌘⌥I)"
+              : "打开应用 Web Inspector (⌘⌥I)"
+          }
+          style={iconSegStyle(false)}
+        >
+          {canInspectPage ? "检查页面" : "检查应用"}
+        </button>
         <button
           onClick={onOpenSessionRecords}
           title="会话记录"

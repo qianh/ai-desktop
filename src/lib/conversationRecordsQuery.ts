@@ -9,27 +9,49 @@ export function filterCacheKey(filter: ConversationRecordsFilter, allPageIds: st
   return `${filter.pageId ?? "*"}|${filter.timeFromMs ?? ""}|${filter.timeToMs ?? ""}|${ids}`;
 }
 
-/** Parse `<input type="datetime-local">` value to epoch ms, or null if empty/invalid. */
-export function datetimeLocalToMs(value: string): number | null {
-  if (!value.trim()) return null;
-  const ms = new Date(value).getTime();
-  return Number.isFinite(ms) ? ms : null;
+function parseDateInput(value: string): { year: number; monthIndex: number; day: number } | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const d = new Date(year, month - 1, day);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) {
+    return null;
+  }
+  return { year, monthIndex: month - 1, day };
 }
 
-/** Format epoch ms for datetime-local input (local timezone). */
-export function msToDatetimeLocal(ms: number): string {
+/** Parse `<input type="date">` value to local start-of-day epoch ms. */
+export function dateInputToStartOfDayMs(value: string): number | null {
+  const parsed = parseDateInput(value);
+  if (!parsed) return null;
+  return new Date(parsed.year, parsed.monthIndex, parsed.day, 0, 0, 0, 0).getTime();
+}
+
+/** Parse `<input type="date">` value to local end-of-day epoch ms. */
+export function dateInputToEndOfDayMs(value: string): number | null {
+  const parsed = parseDateInput(value);
+  if (!parsed) return null;
+  return new Date(parsed.year, parsed.monthIndex, parsed.day, 23, 59, 59, 999).getTime();
+}
+
+/** Format epoch ms for date input (local timezone). */
+export function msToDateInput(ms: number): string {
   const d = new Date(ms);
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** Default session-records time window: from 7 days ago to now (local). */
+/** Default session-records date window: from 7 days ago through today (local). */
 export function defaultPastWeekRange(nowMs = Date.now()): { from: string; to: string } {
   return {
-    from: msToDatetimeLocal(nowMs - WEEK_MS),
-    to: msToDatetimeLocal(nowMs),
+    from: msToDateInput(nowMs - WEEK_MS),
+    to: msToDateInput(nowMs),
   };
 }
 
@@ -40,17 +62,17 @@ export function draftToFilter(
 ): ConversationRecordsFilter {
   return {
     pageId,
-    timeFromMs: datetimeLocalToMs(timeFromInput),
-    timeToMs: datetimeLocalToMs(timeToInput),
+    timeFromMs: dateInputToStartOfDayMs(timeFromInput),
+    timeToMs: dateInputToEndOfDayMs(timeToInput),
   };
 }
 
 /** Returns a user-facing error when the range is invalid, else null. */
 export function validateTimeRange(timeFromInput: string, timeToInput: string): string | null {
-  const from = datetimeLocalToMs(timeFromInput);
-  const to = datetimeLocalToMs(timeToInput);
+  const from = dateInputToStartOfDayMs(timeFromInput);
+  const to = dateInputToEndOfDayMs(timeToInput);
   if (from != null && to != null && from > to) {
-    return "结束时间不能早于开始时间";
+    return "结束日期不能早于开始日期";
   }
   return null;
 }
@@ -126,7 +148,12 @@ function appendPageAndTimeFilters(
   }
   // pageId=null → no page_id filter: include all rows in Supabase (e.g. after page recreate).
 
-  // Time range is applied client-side after timestamp normalization (seconds vs ms).
+  if (filter.timeFromMs != null && Number.isFinite(filter.timeFromMs)) {
+    params.append("timestamp", `gte.${Math.trunc(filter.timeFromMs)}`);
+  }
+  if (filter.timeToMs != null && Number.isFinite(filter.timeToMs)) {
+    params.append("timestamp", `lte.${Math.trunc(filter.timeToMs)}`);
+  }
 }
 
 export function appendConversationSqlFilters(params: URLSearchParams): void {
@@ -188,7 +215,7 @@ export function conversationListQueryOptions(limit: number): InterceptsQueryOpti
   return {
     limit,
     select: INTERCEPTS_LIST_SELECT,
-    sessionListFilter: true,
+    conversationOnly: true,
     httpMethodsOnly: true,
   };
 }

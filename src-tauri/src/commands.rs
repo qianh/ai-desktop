@@ -10,7 +10,9 @@ use crate::default_page::is_default_chat_page;
 use crate::export::write_session_export;
 use crate::models::{Page, Session};
 use crate::paths::AppScopePaths;
-use crate::proxy::{start_proxy, sync_event_file, ProxyRuntime};
+use crate::proxy::{
+    cleanup_stale_appscope_mitmdump_processes, start_proxy, sync_event_file, ProxyRuntime,
+};
 use crate::store::FlowStore;
 use chrono::Utc;
 use serde::Serialize;
@@ -50,11 +52,33 @@ struct AppState {
     intercept_emitted_flow_ids: HashMap<String, HashSet<String>>,
 }
 
+impl AppState {
+    fn stop_all_capture_sessions(&mut self) {
+        let proxies = std::mem::take(&mut self.proxies);
+        for (session_id, proxy) in proxies {
+            let event_file = proxy.event_file.clone();
+            let _ = sync_event_file(&self.store, &session_id, &event_file, None, None, None);
+            self.intercept_sync_lines.remove(&session_id);
+            self.intercept_emitted_flow_ids.remove(&session_id);
+            proxy.stop();
+
+            if let Ok(Some(mut session)) = self.store.get_session(&session_id) {
+                session.status = "stopped".into();
+                session.ended_at = Some(Utc::now());
+                let _ = self.store.save_session(&session);
+            }
+        }
+    }
+}
+
 static STATE: OnceLock<Mutex<AppState>> = OnceLock::new();
 
 fn state_mutex() -> &'static Mutex<AppState> {
     STATE.get_or_init(|| {
         let paths = AppScopePaths::from_default();
+        if let Err(err) = cleanup_stale_appscope_mitmdump_processes(&paths) {
+            eprintln!("[appscope] stale mitmdump cleanup failed: {err}");
+        }
         let store = FlowStore::open(&paths).expect("failed to open flow store");
         Mutex::new(AppState {
             store,
@@ -74,6 +98,15 @@ where
         .lock()
         .map_err(|_| "state lock poisoned".to_string())?;
     f(&mut guard)
+}
+
+pub fn stop_all_capture_sessions() {
+    if let Err(err) = with_state(|state| {
+        state.stop_all_capture_sessions();
+        Ok(())
+    }) {
+        eprintln!("[appscope] stop all capture sessions failed: {err}");
+    }
 }
 
 fn page_display_name(url: &str) -> String {
@@ -128,12 +161,11 @@ pub fn list_pages() -> Result<Vec<PageInfo>, String> {
 }
 
 #[tauri::command]
-pub fn set_page_intercept_reporting(
-    page_id: String,
-    enabled: bool,
-) -> Result<PageInfo, String> {
+pub fn set_page_intercept_reporting(page_id: String, enabled: bool) -> Result<PageInfo, String> {
     with_state(|state| {
-        let page = state.store.set_page_intercept_reporting(&page_id, enabled)?;
+        let page = state
+            .store
+            .set_page_intercept_reporting(&page_id, enabled)?;
         if enabled {
             let session_ids = state.store.page_session_ids(&page_id)?;
             for session_id in session_ids {
@@ -162,14 +194,7 @@ pub fn remove_page(page_id: String) -> Result<(), String> {
         for session_id in session_ids {
             if let Some(proxy) = state.proxies.remove(&session_id) {
                 let event_file = proxy.event_file.clone();
-                let _ = sync_event_file(
-                    &state.store,
-                    &session_id,
-                    &event_file,
-                    None,
-                    None,
-                    None,
-                );
+                let _ = sync_event_file(&state.store, &session_id, &event_file, None, None, None);
                 state.intercept_sync_lines.remove(&session_id);
                 state.intercept_emitted_flow_ids.remove(&session_id);
                 proxy.stop();
@@ -223,14 +248,7 @@ pub fn open_page_with_capture_core(page_id: &str) -> Result<SessionInfo, String>
 
         // Best-effort initial sync after short delay for first navigation.
         std::thread::sleep(std::time::Duration::from_millis(300));
-        let _ = sync_event_file(
-            &state.store,
-            &session_id,
-            &event_file,
-            None,
-            None,
-            None,
-        );
+        let _ = sync_event_file(&state.store, &session_id, &event_file, None, None, None);
 
         Ok(SessionInfo {
             id: session_id,
@@ -247,14 +265,7 @@ pub fn stop_session(session_id: String) -> Result<(), String> {
     with_state(|state| {
         if let Some(proxy) = state.proxies.remove(&session_id) {
             let event_file = proxy.event_file.clone();
-            let _ = sync_event_file(
-                &state.store,
-                &session_id,
-                &event_file,
-                None,
-                None,
-                None,
-            );
+            let _ = sync_event_file(&state.store, &session_id, &event_file, None, None, None);
             state.intercept_sync_lines.remove(&session_id);
             state.intercept_emitted_flow_ids.remove(&session_id);
             proxy.stop();
@@ -270,7 +281,10 @@ pub fn stop_session(session_id: String) -> Result<(), String> {
 
 /// §13.4 — list captured flows for a session.
 #[tauri::command]
-pub fn list_flows(app: tauri::AppHandle, session_id: String) -> Result<Vec<serde_json::Value>, String> {
+pub fn list_flows(
+    app: tauri::AppHandle,
+    session_id: String,
+) -> Result<Vec<serde_json::Value>, String> {
     with_state(|state| {
         if let Some(proxy) = state.proxies.get(&session_id) {
             let line_cursor = state

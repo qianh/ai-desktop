@@ -7,7 +7,6 @@ use chrono::Utc;
 use serde::Deserialize;
 use std::collections::HashSet;
 use std::io::{BufRead, BufReader, Write};
-use tauri::{AppHandle, Emitter};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -15,6 +14,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+use tauri::{AppHandle, Emitter};
 
 #[derive(Debug)]
 pub struct ProxyRuntime {
@@ -90,10 +90,7 @@ pub fn write_addon_script(path: &Path) -> Result<(), String> {
 }
 
 fn detect_system_http_proxy() -> Option<(String, u16)> {
-    let output = Command::new("scutil")
-        .arg("--proxy")
-        .output()
-        .ok()?;
+    let output = Command::new("scutil").arg("--proxy").output().ok()?;
     if !output.status.success() {
         return None;
     }
@@ -116,6 +113,90 @@ fn detect_system_http_proxy() -> Option<(String, u16)> {
         return None;
     }
     Some((host, port))
+}
+
+pub fn cleanup_stale_appscope_mitmdump_processes(paths: &AppScopePaths) -> Result<usize, String> {
+    #[cfg(unix)]
+    {
+        cleanup_stale_appscope_mitmdump_processes_unix(paths)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = paths;
+        Ok(0)
+    }
+}
+
+#[cfg(unix)]
+fn cleanup_stale_appscope_mitmdump_processes_unix(paths: &AppScopePaths) -> Result<usize, String> {
+    let output = Command::new("ps")
+        .args(["-axo", "pid=,ppid=,command="])
+        .output()
+        .map_err(|e| format!("failed to list processes: {e}"))?;
+    if !output.status.success() {
+        return Err("failed to list processes".into());
+    }
+
+    let logs_dir = paths.logs_dir().to_string_lossy().to_string();
+    let current_pid = std::process::id();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut killed = 0usize;
+
+    for line in stdout.lines() {
+        if let Some(pid) = stale_appscope_mitmdump_pid(line, &logs_dir, current_pid) {
+            if terminate_process(pid) {
+                killed += 1;
+            }
+        }
+    }
+
+    Ok(killed)
+}
+
+#[cfg(unix)]
+fn stale_appscope_mitmdump_pid(line: &str, logs_dir: &str, current_pid: u32) -> Option<u32> {
+    let line = line.trim_start();
+    let pid_end = line.find(|c: char| c.is_whitespace())?;
+    let pid: u32 = line[..pid_end].parse().ok()?;
+    if pid == current_pid {
+        return None;
+    }
+
+    let rest = line[pid_end..].trim_start();
+    let ppid_end = rest.find(|c: char| c.is_whitespace())?;
+    let ppid: u32 = rest[..ppid_end].parse().ok()?;
+    if ppid != 1 {
+        return None;
+    }
+
+    let command = rest[ppid_end..].trim_start();
+    if command.contains("mitmdump") && command.contains(logs_dir) && command.contains("_addon.py") {
+        Some(pid)
+    } else {
+        None
+    }
+}
+
+#[cfg(unix)]
+fn terminate_process(pid: u32) -> bool {
+    let pid = pid.to_string();
+    let sent_term = Command::new("kill")
+        .arg("-TERM")
+        .arg(&pid)
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false);
+    thread::sleep(Duration::from_millis(100));
+    if Command::new("kill")
+        .arg("-0")
+        .arg(&pid)
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+    {
+        let _ = Command::new("kill").arg("-KILL").arg(&pid).status();
+    }
+    sent_term
 }
 
 pub fn start_proxy(
@@ -170,10 +251,20 @@ pub fn start_proxy(
 
 impl ProxyRuntime {
     pub fn stop(mut self) {
+        self.stop_child();
+    }
+
+    fn stop_child(&mut self) {
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
             let _ = child.wait();
         }
+    }
+}
+
+impl Drop for ProxyRuntime {
+    fn drop(&mut self) {
+        self.stop_child();
     }
 }
 
@@ -393,8 +484,8 @@ pub fn sync_event_file(
             continue;
         }
 
-        let raw: serde_json::Value = serde_json::from_str(trimmed)
-            .map_err(|e| format!("invalid event json: {e}"))?;
+        let raw: serde_json::Value =
+            serde_json::from_str(trimmed).map_err(|e| format!("invalid event json: {e}"))?;
 
         if raw.get("_type").and_then(|v| v.as_str()) == Some("js_intercept") {
             let emit = match intercept_line_cursor.as_ref() {
@@ -405,8 +496,10 @@ pub fn sync_event_file(
                 if let Some(app) = app {
                     let page_id = raw.get("page_id").and_then(|v| v.as_str()).unwrap_or("");
                     if page_reporting_enabled(store, page_id) {
-                        let items_json =
-                            raw.get("items_json").and_then(|v| v.as_str()).unwrap_or("[]");
+                        let items_json = raw
+                            .get("items_json")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("[]");
                         if let Ok(items) =
                             serde_json::from_str::<Vec<serde_json::Value>>(items_json)
                         {
@@ -589,10 +682,63 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    #[cfg(unix)]
+    fn process_is_running(pid: u32) -> bool {
+        Command::new("kill")
+            .arg("-0")
+            .arg(pid.to_string())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false)
+    }
+
     #[test]
     fn find_mitmdump_returns_path_when_installed() {
         let result = find_mitmdump();
         assert!(result.is_ok(), "expected mitmdump, got {:?}", result);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn proxy_runtime_drop_stops_child_process() {
+        let child = Command::new("sh").arg("-c").arg("sleep 2").spawn().unwrap();
+        let pid = child.id();
+
+        {
+            let _runtime = ProxyRuntime {
+                port: 0,
+                event_file: PathBuf::new(),
+                addon_file: PathBuf::new(),
+                child: Some(child),
+            };
+        }
+
+        thread::sleep(Duration::from_millis(50));
+        assert!(
+            !process_is_running(pid),
+            "child process {pid} was not stopped"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stale_appscope_mitmdump_pid_ignores_live_appscope_child_process() {
+        let logs_dir = "/tmp/AppScope/logs";
+        let line = format!("4242 1234 /usr/bin/mitmdump -q -s {logs_dir}/live_addon.py");
+
+        assert_eq!(stale_appscope_mitmdump_pid(&line, logs_dir, 7777), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stale_appscope_mitmdump_pid_matches_orphaned_appscope_child_process() {
+        let logs_dir = "/tmp/AppScope/logs";
+        let line = format!("4242 1 /usr/bin/mitmdump -q -s {logs_dir}/stale_addon.py");
+
+        assert_eq!(
+            stale_appscope_mitmdump_pid(&line, logs_dir, 7777),
+            Some(4242)
+        );
     }
 
     #[test]
@@ -667,7 +813,8 @@ mod tests {
             .unwrap();
 
         let event_file = dir.path().join("events.jsonl");
-        let intercept_line = r#"{"_type":"js_intercept","page_id":"page-off","items_json":"[{\"id\":\"i1\"}]"}"#;
+        let intercept_line =
+            r#"{"_type":"js_intercept","page_id":"page-off","items_json":"[{\"id\":\"i1\"}]"}"#;
         std::fs::write(&event_file, format!("{intercept_line}\n")).unwrap();
 
         let session_id = "sess-reporting-gate";
@@ -697,9 +844,15 @@ mod tests {
         let session_id = "sess-intercept-shrink";
         let mut cursor = 5000usize;
 
-        let count =
-            sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor), None)
-                .unwrap();
+        let count = sync_event_file(
+            &store,
+            session_id,
+            &event_file,
+            None,
+            Some(&mut cursor),
+            None,
+        )
+        .unwrap();
         assert_eq!(count, 1);
         assert_eq!(cursor, 1);
     }
@@ -716,17 +869,27 @@ mod tests {
         let session_id = "sess-intercept";
         let mut cursor = 0usize;
 
-        sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor), None).unwrap();
-        assert_eq!(cursor, 1);
-
-        std::fs::write(
+        sync_event_file(
+            &store,
+            session_id,
             &event_file,
-            format!("{intercept_line}\n{intercept_line}\n"),
+            None,
+            Some(&mut cursor),
+            None,
         )
         .unwrap();
-        let count =
-            sync_event_file(&store, session_id, &event_file, None, Some(&mut cursor), None)
-                .unwrap();
+        assert_eq!(cursor, 1);
+
+        std::fs::write(&event_file, format!("{intercept_line}\n{intercept_line}\n")).unwrap();
+        let count = sync_event_file(
+            &store,
+            session_id,
+            &event_file,
+            None,
+            Some(&mut cursor),
+            None,
+        )
+        .unwrap();
         assert_eq!(count, 2);
         assert_eq!(cursor, 2);
     }
@@ -805,20 +968,10 @@ mod tests {
             timestamp_ms: Some(1_700_000_000_000),
         };
         let mut emitted = HashSet::new();
-        let first = try_build_flow_intercept_payload(
-            &event,
-            "sess-1",
-            "page-1",
-            true,
-            &mut emitted,
-        );
-        let second = try_build_flow_intercept_payload(
-            &event,
-            "sess-1",
-            "page-1",
-            true,
-            &mut emitted,
-        );
+        let first =
+            try_build_flow_intercept_payload(&event, "sess-1", "page-1", true, &mut emitted);
+        let second =
+            try_build_flow_intercept_payload(&event, "sess-1", "page-1", true, &mut emitted);
         assert!(first.is_some());
         assert!(second.is_none());
         let payload = first.unwrap();

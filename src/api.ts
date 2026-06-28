@@ -234,6 +234,14 @@ export async function getPageWebviewUrl(pageId: string): Promise<string | null> 
   return call<string | null>("get_page_webview_url", { pageId });
 }
 
+export async function openPageWebviewDevtools(pageId: string): Promise<void> {
+  await call<void>("open_page_webview_devtools", { pageId });
+}
+
+export async function openMainDevtools(): Promise<void> {
+  await call<void>("open_main_devtools");
+}
+
 export async function setPageWebviewVisible(pageId: string, visible: boolean): Promise<void> {
   await call<void>("set_page_webview_visible", { pageId, visible });
 }
@@ -558,6 +566,10 @@ function hasTimeFilter(filter: ConversationRecordsFilter): boolean {
   return filter.timeFromMs != null || filter.timeToMs != null;
 }
 
+function withoutTimeFilter(filter: ConversationRecordsFilter): ConversationRecordsFilter {
+  return { ...filter, timeFromMs: null, timeToMs: null };
+}
+
 async function loadInterceptRows(
   filter: ConversationRecordsFilter,
   allPageIds: string[],
@@ -625,21 +637,18 @@ async function fetchAndFilterConversationRows(
 ): Promise<FilteredConversationResult> {
   try {
     let { rows: rawRows } = await loadConversationListRows(filter, allPageIds, config, signal);
-    rawRows = await hydrateServerFnRowBodies(rawRows, config, signal);
-    let normalized = normalizeInterceptRows(rawRows);
-    let timeFiltered = applyClientTimeFilter(normalized, filter);
-
-    if (timeFiltered.length === 0 && hasTimeFilter(filter)) {
-      ({ rows: rawRows } = await loadConversationListRows(
-        { ...filter, timeFromMs: null, timeToMs: null },
+    if (rawRows.length === 0 && hasTimeFilter(filter)) {
+      const retry = await loadConversationListRows(
+        withoutTimeFilter(filter),
         allPageIds,
         config,
         signal,
-      ));
-      rawRows = await hydrateServerFnRowBodies(rawRows, config, signal);
-      normalized = normalizeInterceptRows(rawRows);
-      timeFiltered = applyClientTimeFilter(normalized, filter);
+      );
+      rawRows = retry.rows;
     }
+    rawRows = await hydrateServerFnRowBodies(rawRows, config, signal);
+    let normalized = normalizeInterceptRows(rawRows);
+    const timeFiltered = applyClientTimeFilter(normalized, filter);
 
     return capConversationRows(timeFiltered);
   } catch (error) {
@@ -692,17 +701,12 @@ async function fetchPerPageMerged(
   }
 
   let rawRows = await loadRows(filter);
+  if (rawRows.length === 0 && hasTimeFilter(filter)) {
+    rawRows = await loadRows(withoutTimeFilter(filter));
+  }
   rawRows = await hydrateServerFnRowBodies(rawRows, config, signal);
   let normalized = normalizeInterceptRows(rawRows);
-  let timeFiltered = applyClientTimeFilter(normalized, filter);
-
-  if (timeFiltered.length === 0 && hasTimeFilter(filter)) {
-    const noTime = { ...filter, timeFromMs: null, timeToMs: null };
-    rawRows = await loadRows(noTime);
-    rawRows = await hydrateServerFnRowBodies(rawRows, config, signal);
-    normalized = normalizeInterceptRows(rawRows);
-    timeFiltered = applyClientTimeFilter(normalized, filter);
-  }
+  const timeFiltered = applyClientTimeFilter(normalized, filter);
 
   return capConversationRows(timeFiltered);
 }

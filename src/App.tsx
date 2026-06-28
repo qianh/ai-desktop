@@ -11,7 +11,9 @@ import {
   openCertificateGuide,
   uploadInterceptsToSupabase,
   closePageWebview,
+  openMainDevtools,
   openPageWithCapture,
+  openPageWebviewDevtools,
   removePage,
   savePage,
   setPageInterceptReporting,
@@ -50,6 +52,11 @@ import CertGuideModal from "./components/modals/CertGuideModal";
 import DeletePageModal from "./components/modals/DeletePageModal";
 import { useCertHandlers } from "./hooks/useCertHandlers";
 import { APP_TITLE_BAR_H } from "./lib/chromeLayout";
+import {
+  BACKGROUND_CAPTURE_STOP_DELAY_MS,
+  shouldStopGlobalRecordingAfterStops,
+  stopPageCapture,
+} from "./lib/captureLifecycle";
 
 type NavMode = "sessions" | "records" | "settings";
 type ModalKind = null | "addPage" | "certGuide";
@@ -504,21 +511,54 @@ export default function App() {
     await refreshPages();
   };
 
+  const clearCaptureStateForPages = useCallback((pageIds: string[]) => {
+    const stopped = new Set(pageIds);
+    setPages((prev) =>
+      prev.map((p) => (stopped.has(p.id) ? { ...p, status: "idle" } : p)),
+    );
+    setSessionsByPage((prev) => {
+      const next = { ...prev };
+      for (const pageId of pageIds) delete next[pageId];
+      return next;
+    });
+    setSessionMetaByPage((prev) => {
+      const next = { ...prev };
+      for (const pageId of pageIds) delete next[pageId];
+      return next;
+    });
+  }, []);
+
+  const stopCaptureEntries = useCallback(
+    async (entries: Array<[string, string]>) => {
+      const stoppedPageIds: string[] = [];
+      for (const [pageId, sessionId] of entries) {
+        try {
+          await stopPageCapture(pageId, sessionId, {
+            stopSession,
+            closePageWebview,
+          });
+          stoppedPageIds.push(pageId);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      }
+      if (stoppedPageIds.length > 0) {
+        const stopGlobalRecording = shouldStopGlobalRecordingAfterStops(
+          sessionsByPage,
+          stoppedPageIds,
+        );
+        clearCaptureStateForPages(stoppedPageIds);
+        if (stopGlobalRecording) setRecording(false);
+      }
+    },
+    [clearCaptureStateForPages, sessionsByPage],
+  );
+
   const handleStopRecording = async () => {
     const sessionId = sessionsByPage[activeId];
     if (sessionId) {
-      await stopSession(sessionId);
-      setPages((prev) => prev.map((p) => (p.id === activeId ? { ...p, status: "idle" } : p)));
-      setSessionsByPage((s) => {
-        const next = { ...s };
-        delete next[activeId];
-        return next;
-      });
-      setSessionMetaByPage((s) => {
-        const next = { ...s };
-        delete next[activeId];
-        return next;
-      });
+      await stopCaptureEntries([[activeId, sessionId]]);
+      return;
     }
     setRecording((r) => !r);
   };
@@ -533,7 +573,71 @@ export default function App() {
   );
 
   const activeSessionMeta = sessionMetaByPage[activeId];
+  const activeCaptureEntries = useMemo(
+    () => Object.entries(sessionsByPage),
+    [sessionsByPage],
+  );
   const overlayOpen = modal != null;
+  const canInspectActivePage = (sessionsMode || recordsMode) && Boolean(activeId && activeSessionMeta);
+
+  const handleOpenDevtools = useCallback(async () => {
+    try {
+      setError(null);
+      if (canInspectActivePage) {
+        await openPageWebviewDevtools(activeId);
+        return;
+      }
+      await openMainDevtools();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[appscope] open devtools failed:", e);
+      setError(message);
+    }
+  }, [activeId, canInspectActivePage]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!event.metaKey || !event.altKey || event.key.toLowerCase() !== "i") return;
+      event.preventDefault();
+      void handleOpenDevtools();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleOpenDevtools]);
+
+  useEffect(() => {
+    if (activeCaptureEntries.length === 0) return;
+
+    let timer: number | null = null;
+    const clearTimer = () => {
+      if (timer != null) {
+        window.clearTimeout(timer);
+        timer = null;
+      }
+    };
+    const stopAllCaptures = () => {
+      clearTimer();
+      void stopCaptureEntries(activeCaptureEntries);
+    };
+    const scheduleBackgroundStop = () => {
+      clearTimer();
+      if (document.visibilityState === "hidden") {
+        timer = window.setTimeout(stopAllCaptures, BACKGROUND_CAPTURE_STOP_DELAY_MS);
+      }
+    };
+
+    document.addEventListener("visibilitychange", scheduleBackgroundStop);
+    window.addEventListener("pagehide", stopAllCaptures);
+    window.addEventListener("beforeunload", stopAllCaptures);
+    scheduleBackgroundStop();
+
+    return () => {
+      clearTimer();
+      document.removeEventListener("visibilitychange", scheduleBackgroundStop);
+      window.removeEventListener("pagehide", stopAllCaptures);
+      window.removeEventListener("beforeunload", stopAllCaptures);
+    };
+  }, [activeCaptureEntries, stopCaptureEntries]);
 
   useEffect(() => {
     if (
@@ -587,6 +691,8 @@ export default function App() {
           onToggleInspector={toggleInspector}
           onOpenSessionRecords={handleOpenSessionRecords}
           sessionRecordsActive={recordsMode}
+          onOpenDevtools={handleOpenDevtools}
+          canInspectPage={canInspectActivePage}
         />
 
         <div className="asc-workspace" style={{ minHeight: 0, overflow: "hidden", display: "flex", background: "var(--c-bg)" }}>

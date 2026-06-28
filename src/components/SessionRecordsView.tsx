@@ -215,14 +215,14 @@ function SessionRecordsList({
           </label>
 
           <div style={{ flex: "none" }}>
-            <span style={fieldLabel}>发生时间</span>
+            <span style={fieldLabel}>发生日期</span>
             <div style={timeRangeShell}>
               <input
-                type="datetime-local"
+                type="date"
                 value={draftTimeFrom}
                 onChange={(e) => onDraftTimeFrom(e.target.value)}
                 style={timeRangeInput}
-                title="起始时间"
+                title="起始日期"
               />
               <span style={{ flex: "none", width: 1, alignSelf: "stretch", background: "var(--c-border)" }} />
               <span style={{ flex: "none", padding: "0 6px", fontSize: 11, color: "var(--c-text-4)", userSelect: "none" }}>
@@ -230,11 +230,11 @@ function SessionRecordsList({
               </span>
               <span style={{ flex: "none", width: 1, alignSelf: "stretch", background: "var(--c-border)" }} />
               <input
-                type="datetime-local"
+                type="date"
                 value={draftTimeTo}
                 onChange={(e) => onDraftTimeTo(e.target.value)}
                 style={timeRangeInput}
-                title="结束时间"
+                title="结束日期"
               />
             </div>
           </div>
@@ -249,7 +249,7 @@ function SessionRecordsList({
               cursor: hasDraftTime ? "pointer" : "default",
             }}
           >
-            清除时间
+            清除日期
           </button>
 
           <div style={{ flex: "1 1 12px", minWidth: 8 }} />
@@ -325,7 +325,7 @@ function SessionRecordsList({
             <div style={{ fontSize: 12, marginTop: 6, lineHeight: 1.5 }}>
               会话记录显示对话类请求（ChatGPT /backend-api/conversation、内置 Chat /api/chat 等），不含统计、配置类请求。
               <br />
-              可尝试：选「全部 Page」、点「清除时间」后重新查询。
+              可尝试：选「全部 Page」、点「清除日期」后重新查询。
             </div>
           </div>
         )}

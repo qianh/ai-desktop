@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchFilteredConversationIntercepts } from "./api";
-import { INTERCEPTS_LIST_SELECT, SESSION_LIST_OR_VALUE } from "./lib/conversationRecordsQuery";
+import { INTERCEPTS_LIST_SELECT } from "./lib/conversationRecordsQuery";
 
 import type { SupabaseConfig } from "./lib/supabase";
 
@@ -30,7 +30,7 @@ describe("fetchFilteredConversationIntercepts", () => {
     vi.unstubAllGlobals();
   });
 
-  it("uses lean list select and session list or filter (no bodies)", async () => {
+  it("uses lean list select and indexed conversation filter (no bodies)", async () => {
     const calls: string[] = [];
     mockFetch((url) => {
       calls.push(decodeURIComponent(url));
@@ -65,8 +65,8 @@ describe("fetchFilteredConversationIntercepts", () => {
     );
 
     expect(calls[0]).toContain(`select=${INTERCEPTS_LIST_SELECT}`);
-    expect(calls[0]).toContain(`or=${SESSION_LIST_OR_VALUE}`);
-    expect(calls[0]).not.toContain("is_conversation=eq.true");
+    expect(calls[0]).toContain("is_conversation=eq.true");
+    expect(calls[0]).not.toContain("or=");
     expect(calls[0]).not.toContain("or=(and(method.eq.POST");
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].id).toBe("r1");
@@ -148,6 +148,70 @@ describe("fetchFilteredConversationIntercepts", () => {
 
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].timestamp).toBe(1_718_000_000_000);
+  });
+
+  it("retries without time filters when a ranged query is empty so epoch-second history survives", async () => {
+    const calls: string[] = [];
+    mockFetch((url) => {
+      calls.push(decodeURIComponent(url));
+      if (url.includes("timestamp=")) return jsonResponse([]);
+      return jsonResponse([
+        {
+          id: "legacy-sec",
+          timestamp: 1_718_000_000,
+          url: "https://chatgpt.com/backend-api/conversation",
+          method: "POST",
+          page_id: "p1",
+          preview_text: "legacy seconds",
+          is_conversation: true,
+          conversation_id: null,
+        },
+      ]);
+    });
+
+    const result = await fetchFilteredConversationIntercepts(
+      { pageId: "p1", timeFromMs: 1_718_000_000_000, timeToMs: 1_718_086_400_000 },
+      ["p1"],
+      config,
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain("timestamp=gte.1718000000000");
+    expect(calls[0]).toContain("timestamp=lte.1718086400000");
+    expect(calls[1]).not.toContain("timestamp=");
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].id).toBe("legacy-sec");
+    expect(result.rows[0].timestamp).toBe(1_718_000_000_000);
+  });
+
+  it("does not retry without time filters when the ranged query returns rows", async () => {
+    const calls: string[] = [];
+    mockFetch((url) => {
+      calls.push(decodeURIComponent(url));
+      return jsonResponse([
+        {
+          id: "ms",
+          timestamp: 1_718_000_000_000,
+          url: "https://chatgpt.com/backend-api/conversation",
+          method: "POST",
+          page_id: "p1",
+          preview_text: "already in range",
+          is_conversation: true,
+          conversation_id: null,
+        },
+      ]);
+    });
+
+    const result = await fetchFilteredConversationIntercepts(
+      { pageId: "p1", timeFromMs: 1_718_000_000_000, timeToMs: 1_718_086_400_000 },
+      ["p1"],
+      config,
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("timestamp=gte.1718000000000");
+    expect(calls[0]).toContain("timestamp=lte.1718086400000");
+    expect(result.rows).toHaveLength(1);
   });
 
   it("includes GET conversation rows via preview_text without resp_body", async () => {
@@ -292,7 +356,7 @@ describe("fetchFilteredConversationIntercepts", () => {
     );
 
     expect(calls.length).toBeGreaterThanOrEqual(2);
-    expect(calls[0]).toContain(`or=${SESSION_LIST_OR_VALUE}`);
+    expect(calls[0]).toContain("is_conversation=eq.true");
     expect(calls[1]).not.toContain("is_conversation.eq.true");
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].id).toBe("legacy-1");
@@ -315,5 +379,44 @@ describe("fetchFilteredConversationIntercepts", () => {
     );
 
     expect(calls.filter((u) => u.includes("page_id=eq.")).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("retries per-page fallback without time filters when ranged page queries are empty", async () => {
+    const calls: string[] = [];
+    mockFetch((url) => {
+      const decoded = decodeURIComponent(url);
+      calls.push(decoded);
+      if (!decoded.includes("page_id=eq.")) {
+        return jsonResponse({ message: "bulk too broad" }, 400);
+      }
+      if (decoded.includes("timestamp=")) return jsonResponse([]);
+      if (decoded.includes("page_id=eq.p1")) {
+        return jsonResponse([
+          {
+            id: "per-page-legacy-sec",
+            timestamp: 1_718_000_000,
+            url: "https://chatgpt.com/backend-api/conversation",
+            method: "POST",
+            page_id: "p1",
+            preview_text: "legacy per page",
+            is_conversation: true,
+            conversation_id: null,
+          },
+        ]);
+      }
+      return jsonResponse([]);
+    });
+
+    const result = await fetchFilteredConversationIntercepts(
+      { pageId: null, timeFromMs: 1_718_000_000_000, timeToMs: 1_718_086_400_000 },
+      ["p1", "p2"],
+      config,
+    );
+
+    expect(calls.some((u) => u.includes("page_id=eq.p1") && u.includes("timestamp="))).toBe(true);
+    expect(calls.some((u) => u.includes("page_id=eq.p1") && !u.includes("timestamp="))).toBe(true);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].id).toBe("per-page-legacy-sec");
+    expect(result.rows[0].timestamp).toBe(1_718_000_000_000);
   });
 });
