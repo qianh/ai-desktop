@@ -1,4 +1,6 @@
 mod cert;
+mod chat_commands;
+mod chat_providers;
 mod chrome;
 mod commands;
 mod default_page;
@@ -9,6 +11,12 @@ pub mod paths;
 pub mod proxy;
 pub mod store;
 
+use chat_commands::{
+    cancel_codex_task, confirm_codex_task, create_chat_thread, delete_chat_memory_entry,
+    delete_chat_thread, list_chat_memory_entries, list_chat_messages, list_chat_provider_profiles,
+    list_chat_threads, preview_codex_task_command, rename_chat_thread, save_chat_memory_entry,
+    save_chat_provider_profile, send_chat_message,
+};
 use commands::{
     export_session, generate_certificate, get_certificate_status, get_flow_detail,
     install_certificate, list_flows, list_pages, open_certificate_guide, open_page_with_capture,
@@ -44,6 +52,20 @@ pub fn run() {
             close_page_webview,
             set_page_webview_visible,
             sync_page_webview_bounds,
+            list_chat_provider_profiles,
+            save_chat_provider_profile,
+            list_chat_threads,
+            create_chat_thread,
+            rename_chat_thread,
+            delete_chat_thread,
+            list_chat_messages,
+            send_chat_message,
+            list_chat_memory_entries,
+            save_chat_memory_entry,
+            delete_chat_memory_entry,
+            preview_codex_task_command,
+            confirm_codex_task,
+            cancel_codex_task,
         ])
         .build(tauri::generate_context!())
         .expect("error while building AppScope");

@@ -1,5 +1,6 @@
 // Settings view (§14 of the spec). Toggle state lives in App.
 import { useState, type KeyboardEvent } from "react";
+import AppChatSettings from "./AppChatSettings";
 import CertManager from "./CertManager";
 import type { GlassIntensity, StylePreset, StylePreviewPalette, ThemeMode } from "../lib/appearance";
 import { STYLE_PRESETS } from "../lib/appearance";
@@ -389,6 +390,33 @@ export default function Settings({
             </div>
           </div>
         ))}
+
+        <div style={{ marginBottom: 26 }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              color: "var(--c-text-4)",
+              letterSpacing: ".05em",
+              textTransform: "uppercase",
+              marginBottom: 8,
+            }}
+          >
+            App Chat
+          </div>
+          <div
+            className="asc-settings-section"
+            style={{
+              border: "1px solid var(--c-border)",
+              borderRadius: "var(--c-radius-lg, 11px)",
+              overflow: "hidden",
+              boxShadow: "var(--c-elevate, none)",
+              padding: 16,
+            }}
+          >
+            <AppChatSettings />
+          </div>
+        </div>
 
         <div style={{ marginBottom: 26 }}>
           <div

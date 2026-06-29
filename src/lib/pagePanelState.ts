@@ -1,4 +1,4 @@
-export type NavMode = "sessions" | "records" | "settings";
+export type NavMode = "sessions" | "records" | "settings" | "app-chat";
 
 /** Per-page capture panel visibility derived from workspace navigation state. */
 export type PagePanelState = "hidden" | "layout-only" | "visible";

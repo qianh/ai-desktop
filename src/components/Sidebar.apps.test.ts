@@ -20,6 +20,8 @@ describe("Sidebar app feature removal", () => {
         onAddPage: () => undefined,
 
         onSettings: () => undefined,
+        onOpenAppChat: () => undefined,
+        appChatActive: false,
       }),
     );
 

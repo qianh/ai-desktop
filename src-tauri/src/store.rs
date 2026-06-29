@@ -1,4 +1,7 @@
-use crate::models::{Flow, FlowDetail, FlowListItem, HeaderPair, Page, Session};
+use crate::models::{
+    ChatMemoryEntry, ChatMessage, ChatProviderProfile, ChatTaskAudit, ChatThread, Flow,
+    FlowDetail, FlowListItem, HeaderPair, Page, Session,
+};
 use crate::paths::AppScopePaths;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
@@ -18,6 +21,7 @@ impl FlowStore {
             paths: paths.clone(),
         };
         store.migrate()?;
+        store.seed_default_chat_provider_profiles()?;
         Ok(store)
     }
 
@@ -31,6 +35,7 @@ impl FlowStore {
             paths: AppScopePaths::new(root),
         };
         store.migrate()?;
+        store.seed_default_chat_provider_profiles()?;
         Ok(store)
     }
 
@@ -88,6 +93,53 @@ impl FlowStore {
                     finished_at TEXT
                 );
                 CREATE INDEX IF NOT EXISTS idx_flows_session ON flows(session_id);
+                CREATE TABLE IF NOT EXISTS chat_provider_profiles (
+                    id TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    kind TEXT NOT NULL,
+                    api_key TEXT,
+                    base_url TEXT,
+                    default_model TEXT,
+                    codex_path TEXT,
+                    codex_extra_args_json TEXT NOT NULL DEFAULT '[]',
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS chat_threads (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    provider_profile_id TEXT NOT NULL REFERENCES chat_provider_profiles(id),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id TEXT PRIMARY KEY,
+                    thread_id TEXT NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    provider_profile_id TEXT,
+                    error_message TEXT,
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS chat_memory_entries (
+                    id TEXT PRIMARY KEY,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS chat_task_audits (
+                    id TEXT PRIMARY KEY,
+                    thread_id TEXT NOT NULL,
+                    message_id TEXT,
+                    command_summary TEXT NOT NULL,
+                    workdir TEXT,
+                    exit_code INTEGER,
+                    stderr_preview TEXT,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id);
                 ",
             )
             .map_err(|e| e.to_string())?;
@@ -371,6 +423,353 @@ impl FlowStore {
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())
     }
+
+    pub fn seed_default_chat_provider_profiles(&self) -> Result<(), String> {
+        let now = Utc::now().to_rfc3339();
+        let defaults = [
+            (
+                "deepseek",
+                "Deepseek",
+                "api",
+                "https://api.deepseek.com",
+                "deepseek-chat",
+            ),
+            ("glm", "GLM", "api", "https://open.bigmodel.cn", "glm-4-flash"),
+            ("chatgpt_codex", "ChatGPT (Codex)", "codex_cli", "", "gpt-4o-mini"),
+        ];
+        for (id, display_name, kind, base_url, default_model) in defaults {
+            self.conn
+                .execute(
+                    "INSERT OR IGNORE INTO chat_provider_profiles
+                     (id, display_name, kind, api_key, base_url, default_model, codex_path, codex_extra_args_json, enabled, updated_at)
+                     VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?6, '[]', 1, ?7)",
+                    params![
+                        id,
+                        display_name,
+                        kind,
+                        if base_url.is_empty() { None::<&str> } else { Some(base_url) },
+                        default_model,
+                        if kind == "codex_cli" { Some("codex") } else { None::<&str> },
+                        now,
+                    ],
+                )
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
+    pub fn list_chat_provider_profiles(&self) -> Result<Vec<ChatProviderProfile>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, display_name, kind, api_key, base_url, default_model, codex_path, codex_extra_args_json, enabled, updated_at
+                 FROM chat_provider_profiles ORDER BY display_name ASC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(ChatProviderProfile {
+                    id: row.get(0)?,
+                    display_name: row.get(1)?,
+                    kind: row.get(2)?,
+                    api_key: row.get(3)?,
+                    base_url: row.get(4)?,
+                    default_model: row.get(5)?,
+                    codex_path: row.get(6)?,
+                    codex_extra_args_json: row.get(7)?,
+                    enabled: row.get::<_, i32>(8)? != 0,
+                    updated_at: parse_ts(row.get::<_, String>(9)?),
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn save_chat_provider_profile(&self, profile: &ChatProviderProfile) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO chat_provider_profiles
+                 (id, display_name, kind, api_key, base_url, default_model, codex_path, codex_extra_args_json, enabled, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                params![
+                    profile.id,
+                    profile.display_name,
+                    profile.kind,
+                    profile.api_key,
+                    profile.base_url,
+                    profile.default_model,
+                    profile.codex_path,
+                    profile.codex_extra_args_json,
+                    i32::from(profile.enabled),
+                    profile.updated_at.to_rfc3339(),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn create_chat_thread(&self, thread: &ChatThread) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT INTO chat_threads (id, title, provider_profile_id, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    thread.id,
+                    thread.title,
+                    thread.provider_profile_id,
+                    thread.created_at.to_rfc3339(),
+                    thread.updated_at.to_rfc3339(),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn list_chat_threads(&self) -> Result<Vec<ChatThread>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, title, provider_profile_id, created_at, updated_at
+                 FROM chat_threads ORDER BY updated_at DESC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(ChatThread {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    provider_profile_id: row.get(2)?,
+                    created_at: parse_ts(row.get::<_, String>(3)?),
+                    updated_at: parse_ts(row.get::<_, String>(4)?),
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn get_chat_provider_profile(&self, id: &str) -> Result<Option<ChatProviderProfile>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, display_name, kind, api_key, base_url, default_model, codex_path, codex_extra_args_json, enabled, updated_at
+                 FROM chat_provider_profiles WHERE id = ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt.query(params![id]).map_err(|e| e.to_string())?;
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            return Ok(Some(ChatProviderProfile {
+                id: row.get(0).map_err(|e| e.to_string())?,
+                display_name: row.get(1).map_err(|e| e.to_string())?,
+                kind: row.get(2).map_err(|e| e.to_string())?,
+                api_key: row.get(3).map_err(|e| e.to_string())?,
+                base_url: row.get(4).map_err(|e| e.to_string())?,
+                default_model: row.get(5).map_err(|e| e.to_string())?,
+                codex_path: row.get(6).map_err(|e| e.to_string())?,
+                codex_extra_args_json: row.get(7).map_err(|e| e.to_string())?,
+                enabled: row.get::<_, i32>(8).map_err(|e| e.to_string())? != 0,
+                updated_at: parse_ts(row.get::<_, String>(9).map_err(|e| e.to_string())?),
+            }));
+        }
+        Ok(None)
+    }
+
+    pub fn rename_chat_thread(&self, thread_id: &str, title: &str) -> Result<ChatThread, String> {
+        let now = Utc::now();
+        let changed = self
+            .conn
+            .execute(
+                "UPDATE chat_threads SET title = ?1, updated_at = ?2 WHERE id = ?3",
+                params![title, now.to_rfc3339(), thread_id],
+            )
+            .map_err(|e| e.to_string())?;
+        if changed == 0 {
+            return Err("thread not found".into());
+        }
+        self.get_chat_thread(thread_id)?
+            .ok_or_else(|| "thread not found".into())
+    }
+
+    pub fn touch_chat_thread(&self, thread_id: &str) -> Result<(), String> {
+        let now = Utc::now().to_rfc3339();
+        self.conn
+            .execute(
+                "UPDATE chat_threads SET updated_at = ?1 WHERE id = ?2",
+                params![now, thread_id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn get_chat_thread(&self, thread_id: &str) -> Result<Option<ChatThread>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, title, provider_profile_id, created_at, updated_at FROM chat_threads WHERE id = ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt.query(params![thread_id]).map_err(|e| e.to_string())?;
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            return Ok(Some(ChatThread {
+                id: row.get(0).map_err(|e| e.to_string())?,
+                title: row.get(1).map_err(|e| e.to_string())?,
+                provider_profile_id: row.get(2).map_err(|e| e.to_string())?,
+                created_at: parse_ts(row.get::<_, String>(3).map_err(|e| e.to_string())?),
+                updated_at: parse_ts(row.get::<_, String>(4).map_err(|e| e.to_string())?),
+            }));
+        }
+        Ok(None)
+    }
+
+    pub fn get_chat_message(&self, message_id: &str) -> Result<Option<ChatMessage>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, thread_id, role, content, status, provider_profile_id, error_message, metadata_json, created_at
+                 FROM chat_messages WHERE id = ?1",
+            )
+            .map_err(|e| e.to_string())?;
+        let mut rows = stmt.query(params![message_id]).map_err(|e| e.to_string())?;
+        if let Some(row) = rows.next().map_err(|e| e.to_string())? {
+            return Ok(Some(ChatMessage {
+                id: row.get(0).map_err(|e| e.to_string())?,
+                thread_id: row.get(1).map_err(|e| e.to_string())?,
+                role: row.get(2).map_err(|e| e.to_string())?,
+                content: row.get(3).map_err(|e| e.to_string())?,
+                status: row.get(4).map_err(|e| e.to_string())?,
+                provider_profile_id: row.get(5).map_err(|e| e.to_string())?,
+                error_message: row.get(6).map_err(|e| e.to_string())?,
+                metadata_json: row.get(7).map_err(|e| e.to_string())?,
+                created_at: parse_ts(row.get::<_, String>(8).map_err(|e| e.to_string())?),
+            }));
+        }
+        Ok(None)
+    }
+
+    pub fn delete_chat_thread(&self, thread_id: &str) -> Result<(), String> {
+        self.conn
+            .execute("DELETE FROM chat_threads WHERE id = ?1", params![thread_id])
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn insert_chat_message(&self, message: &ChatMessage) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO chat_messages
+                 (id, thread_id, role, content, status, provider_profile_id, error_message, metadata_json, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    message.id,
+                    message.thread_id,
+                    message.role,
+                    message.content,
+                    message.status,
+                    message.provider_profile_id,
+                    message.error_message,
+                    message.metadata_json,
+                    message.created_at.to_rfc3339(),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn list_chat_messages(&self, thread_id: &str) -> Result<Vec<ChatMessage>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, thread_id, role, content, status, provider_profile_id, error_message, metadata_json, created_at
+                 FROM chat_messages WHERE thread_id = ?1 ORDER BY created_at ASC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map(params![thread_id], |row| {
+                Ok(ChatMessage {
+                    id: row.get(0)?,
+                    thread_id: row.get(1)?,
+                    role: row.get(2)?,
+                    content: row.get(3)?,
+                    status: row.get(4)?,
+                    provider_profile_id: row.get(5)?,
+                    error_message: row.get(6)?,
+                    metadata_json: row.get(7)?,
+                    created_at: parse_ts(row.get::<_, String>(8)?),
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn save_chat_memory_entry(&self, entry: &ChatMemoryEntry) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO chat_memory_entries (id, content, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4)",
+                params![
+                    entry.id,
+                    entry.content,
+                    entry.created_at.to_rfc3339(),
+                    entry.updated_at.to_rfc3339(),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn list_chat_memory_entries(&self) -> Result<Vec<ChatMemoryEntry>, String> {
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT id, content, created_at, updated_at FROM chat_memory_entries ORDER BY updated_at DESC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(ChatMemoryEntry {
+                    id: row.get(0)?,
+                    content: row.get(1)?,
+                    created_at: parse_ts(row.get::<_, String>(2)?),
+                    updated_at: parse_ts(row.get::<_, String>(3)?),
+                })
+            })
+            .map_err(|e| e.to_string())?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn delete_chat_memory_entry(&self, entry_id: &str) -> Result<(), String> {
+        self.conn
+            .execute(
+                "DELETE FROM chat_memory_entries WHERE id = ?1",
+                params![entry_id],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn insert_chat_task_audit(&self, audit: &ChatTaskAudit) -> Result<(), String> {
+        self.conn
+            .execute(
+                "INSERT OR REPLACE INTO chat_task_audits
+                 (id, thread_id, message_id, command_summary, workdir, exit_code, stderr_preview, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    audit.id,
+                    audit.thread_id,
+                    audit.message_id,
+                    audit.command_summary,
+                    audit.workdir,
+                    audit.exit_code,
+                    audit.stderr_preview,
+                    audit.created_at.to_rfc3339(),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
 }
 
 fn read_page_row(row: &rusqlite::Row<'_>) -> Result<Page, String> {
@@ -444,7 +843,7 @@ fn parse_headers(json: &str) -> Vec<HeaderPair> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::HeaderPair;
+    use crate::models::{ChatMemoryEntry, ChatMessage, ChatThread, HeaderPair};
     use chrono::Utc;
     use tempfile::tempdir;
 
@@ -690,6 +1089,54 @@ mod tests {
         store.save_page(&page).unwrap();
         let loaded = store.get_page("page-new").unwrap().expect("page");
         assert!(!loaded.intercept_reporting_enabled);
+    }
+
+    #[test]
+    fn chat_store_roundtrip_thread_message_and_memory() {
+        let dir = tempdir().unwrap();
+        let store = FlowStore::open_at(&dir.path().join("appscope.db"), dir.path()).unwrap();
+        let now = Utc::now();
+
+        let profiles = store.list_chat_provider_profiles().unwrap();
+        assert!(profiles.iter().any(|p| p.id == "deepseek"));
+
+        let thread = ChatThread {
+            id: "thread-1".into(),
+            title: "First chat".into(),
+            provider_profile_id: "deepseek".into(),
+            created_at: now,
+            updated_at: now,
+        };
+        store.create_chat_thread(&thread).unwrap();
+
+        let message = ChatMessage {
+            id: "msg-1".into(),
+            thread_id: thread.id.clone(),
+            role: "user".into(),
+            content: "Hello".into(),
+            status: "complete".into(),
+            provider_profile_id: Some("deepseek".into()),
+            error_message: None,
+            metadata_json: "{}".into(),
+            created_at: now,
+        };
+        store.insert_chat_message(&message).unwrap();
+
+        let memory = ChatMemoryEntry {
+            id: "mem-1".into(),
+            content: "User prefers Rust".into(),
+            created_at: now,
+            updated_at: now,
+        };
+        store.save_chat_memory_entry(&memory).unwrap();
+
+        assert_eq!(store.list_chat_threads().unwrap().len(), 1);
+        assert_eq!(store.list_chat_messages("thread-1").unwrap().len(), 1);
+        assert_eq!(store.list_chat_memory_entries().unwrap().len(), 1);
+
+        store.delete_chat_thread("thread-1").unwrap();
+        assert!(store.list_chat_threads().unwrap().is_empty());
+        assert!(store.list_chat_messages("thread-1").unwrap().is_empty());
     }
 
     #[test]

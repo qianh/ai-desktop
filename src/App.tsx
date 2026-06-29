@@ -25,6 +25,7 @@ import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import SessionsWorkspace from "./components/SessionsWorkspace";
 
+import AppChatWorkspace from "./components/AppChatWorkspace";
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
 import { bindLiquidPointer } from "./hooks/useLiquidPointer";
 import {
@@ -58,7 +59,7 @@ import {
   stopPageCapture,
 } from "./lib/captureLifecycle";
 
-type NavMode = "sessions" | "records" | "settings";
+type NavMode = "sessions" | "records" | "settings" | "app-chat";
 type ModalKind = null | "addPage" | "certGuide";
 
 type PageSessionMeta = {
@@ -226,11 +227,14 @@ export default function App() {
   const active = find(activeId);
   const sessionsMode = navMode === "sessions";
   const recordsMode = navMode === "records";
+  const appChatMode = navMode === "app-chat";
   const flows = activeFlows();
 
   const titleSuffix =
     navMode === "settings"
       ? "Settings"
+      : appChatMode
+      ? "App Chat"
       : recordsMode
       ? "会话记录"
       : active
@@ -710,12 +714,15 @@ export default function App() {
             onToggleInterceptReporting={handleToggleInterceptReporting}
             onAddPage={() => setModal("addPage")}
             onSettings={() => setNavMode("settings")}
+            onOpenAppChat={() => setNavMode("app-chat")}
+            appChatActive={appChatMode}
           />
 
           <div
             className="asc-content-panel"
             style={{ flex: 1, minWidth: 0, position: "relative", display: "flex", flexDirection: "column", minHeight: 0, height: "100%", overflow: "hidden", background: "var(--c-bg)" }}
           >
+            {appChatMode && <AppChatWorkspace />}
             {navMode === "settings" && (
               <Settings
                 toggles={toggles}

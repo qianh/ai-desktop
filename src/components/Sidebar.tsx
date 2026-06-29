@@ -248,6 +248,8 @@ type Props = {
   onToggleInterceptReporting: (pageId: string, enabled: boolean) => void | Promise<void>;
   onAddPage: () => void;
   onSettings: () => void;
+  onOpenAppChat: () => void;
+  appChatActive: boolean;
 };
 
 function partitionPages(pages: Page[]) {
@@ -361,6 +363,15 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
 
       {/* scroll list */}
       <div style={{ flex: 1, overflow: "auto", minHeight: 0, padding: "2px 8px 8px" }}>
+        <button
+          onClick={p.onOpenAppChat}
+          style={navSel(p.appChatActive)}
+          title="Built-in App Chat"
+        >
+          <span style={{ fontSize: 14 }}>💬</span>
+          <span>App Chat</span>
+        </button>
+
         {chatPage && (
           <div
             className={listRowClass(rowSelected(chatPage.id))}

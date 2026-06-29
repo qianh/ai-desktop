@@ -16,7 +16,9 @@ const baseProps = {
   onDeletePage: () => undefined,
   onToggleInterceptReporting: () => undefined,
   onAddPage: () => undefined,
-  onSettings: () => undefined,
+        onSettings: () => undefined,
+        onOpenAppChat: () => undefined,
+        appChatActive: false,
 };
 
 function makePage(overrides: Partial<Page> = {}): Page {

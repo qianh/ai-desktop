@@ -101,3 +101,60 @@ pub struct HeaderPair {
 pub struct CertificateState {
     pub state: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatProviderProfile {
+    pub id: String,
+    pub display_name: String,
+    pub kind: String,
+    pub api_key: Option<String>,
+    pub base_url: Option<String>,
+    pub default_model: Option<String>,
+    pub codex_path: Option<String>,
+    pub codex_extra_args_json: String,
+    pub enabled: bool,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatThread {
+    pub id: String,
+    pub title: String,
+    pub provider_profile_id: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatMessage {
+    pub id: String,
+    pub thread_id: String,
+    pub role: String,
+    pub content: String,
+    pub status: String,
+    pub provider_profile_id: Option<String>,
+    pub error_message: Option<String>,
+    pub metadata_json: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ChatMemoryEntry {
+    pub id: String,
+    pub content: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatTaskAudit {
+    pub id: String,
+    pub thread_id: String,
+    pub message_id: Option<String>,
+    pub command_summary: String,
+    pub workdir: Option<String>,
+    pub exit_code: Option<i32>,
+    pub stderr_preview: Option<String>,
+    pub created_at: DateTime<Utc>,
+}

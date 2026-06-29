@@ -42,9 +42,9 @@ pub struct PageInfo {
     pub intercept_reporting_enabled: bool,
 }
 
-struct AppState {
-    store: FlowStore,
-    paths: AppScopePaths,
+pub(crate) struct AppState {
+    pub(crate) store: FlowStore,
+    pub(crate) paths: AppScopePaths,
     proxies: HashMap<String, ProxyRuntime>,
     /// Last processed physical line in each session event file for js_intercept emits.
     intercept_sync_lines: HashMap<String, usize>,
@@ -90,7 +90,7 @@ fn state_mutex() -> &'static Mutex<AppState> {
     })
 }
 
-fn with_state<F, T>(f: F) -> Result<T, String>
+pub(crate) fn with_state<F, T>(f: F) -> Result<T, String>
 where
     F: FnOnce(&mut AppState) -> Result<T, String>,
 {

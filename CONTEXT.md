@@ -39,3 +39,18 @@ The Chrome Session MVP includes JSON export and a minimal HAR 1.2 export for the
 A saved local macOS application launcher entry.
 
 For the Chrome Session MVP, Add App means scanning installed apps, saving an app entry, and launching the app normally. System Proxy Capture and Transparent Capture are not accepted behavior for this slice, and App Entries are not expected to produce captured flows.
+
+### App Chat
+
+An in-app conversational workspace owned by AppScope itself, with local chat history, model selection, and memory. It is distinct from the built-in external Chat page that AppScope launches or captures as a Page.
+_Avoid_: using "Chat" alone when the distinction from the external Chat page matters.
+
+### Model Provider
+
+A configured backend that can answer an App Chat message. Deepseek and GLM are API providers; ChatGPT is represented by the local Codex CLI provider in the first App Chat slice.
+_Avoid_: assuming every provider is a CLI command or every provider is a direct cloud API.
+
+### Global Memory
+
+A local collection of user-editable facts that every App Chat conversation may use as context. It is shared across App Chat threads and is separate from per-thread message history.
+_Avoid_: Conversation summary, browser cache, captured traffic.
