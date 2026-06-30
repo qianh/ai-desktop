@@ -21,7 +21,6 @@ type Props = {
   proxyPort: number;
   interceptReportingEnabled: boolean;
   panelState: PagePanelState;
-  inspectorOpen: boolean;
   sidebarRef?: RefObject<HTMLElement | null>;
 };
 
@@ -81,7 +80,6 @@ export default function PageBrowser({
   proxyPort,
   interceptReportingEnabled,
   panelState,
-  inspectorOpen,
   sidebarRef,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -406,7 +404,7 @@ export default function PageBrowser({
     if (!isTauriRuntime() || !mounted || panelState !== "visible") return;
     const timer = window.setTimeout(pushBounds, BOUNDS_SYNC_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
-  }, [panelState, mounted, inspectorOpen, pushBounds]);
+  }, [panelState, mounted, pushBounds]);
 
   // Window focus can drift native webview over the sidebar — debounced re-sync.
   useEffect(() => {
@@ -422,12 +420,12 @@ export default function PageBrowser({
         top: 0,
         bottom: 0,
         left: 0,
-        ...(inspectorOpen && active ? { width: "58%" } : { right: 0 }),
+        right: 0,
         minWidth: 0,
         minHeight: 0,
         display: "flex",
         flexDirection: "column",
-        borderRight: inspectorOpen && active ? "1px solid #ededf0" : "none",
+        borderRight: "none",
         background: "var(--c-bg)",
         visibility: active ? "visible" : "hidden",
         pointerEvents: active ? "auto" : "none",

@@ -1,4 +1,4 @@
-// macOS window title bar with traffic lights + A/B layout toggle.
+// macOS workspace header — drag region + layout controls.
 import { APP_TITLE_BAR_H } from "../lib/chromeLayout";
 import { segStyle } from "../lib/ui";
 
@@ -14,22 +14,14 @@ export default function TitleBar({
   titleSuffix,
   variant,
   onVariant,
-  inspectorOpen,
-  onToggleInspector,
-  onOpenSessionRecords,
-  sessionRecordsActive,
-  onOpenDevtools,
-  canInspectPage,
+  sidePaneOpen,
+  onToggleSidePane,
 }: {
   titleSuffix: string;
   variant: "A" | "B";
   onVariant: (v: "A" | "B") => void;
-  inspectorOpen: boolean;
-  onToggleInspector: () => void;
-  onOpenSessionRecords: () => void;
-  sessionRecordsActive: boolean;
-  onOpenDevtools: () => void;
-  canInspectPage: boolean;
+  sidePaneOpen: boolean;
+  onToggleSidePane: () => void;
 }) {
   return (
     <div
@@ -55,26 +47,11 @@ export default function TitleBar({
         <span style={{ fontSize: 12.5, color: "var(--c-text-4)" }}>— {titleSuffix}</span>
       </div>
       <div data-tauri-no-drag style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <button
-          onClick={onOpenDevtools}
-          title={
-            canInspectPage
-              ? "打开当前页面 Web Inspector (⌘⌥I)"
-              : "打开应用 Web Inspector (⌘⌥I)"
-          }
-          style={iconSegStyle(false)}
-        >
-          {canInspectPage ? "检查页面" : "检查应用"}
-        </button>
-        <button
-          onClick={onOpenSessionRecords}
-          title="会话记录"
-          style={iconSegStyle(sessionRecordsActive)}
-        >
-          💬 会话记录
-        </button>
         <span style={{ fontSize: 11, color: "var(--c-text-4)" }}>布局</span>
-        <div className="asc-segment-track" style={{ display: "flex", background: "var(--c-border-2)", borderRadius: 7, padding: 2, gap: 2 }}>
+        <div
+          className="asc-segment-track"
+          style={{ display: "flex", background: "var(--c-border-2)", borderRadius: 7, padding: 2, gap: 2 }}
+        >
           <button
             className={variant === "A" ? "asc-segment-btn--on" : undefined}
             onClick={() => onVariant("A")}
@@ -91,11 +68,11 @@ export default function TitleBar({
           </button>
         </div>
         <button
-          onClick={onToggleInspector}
-          title={inspectorOpen ? "收起右侧面板" : "展开右侧面板"}
-          style={iconSegStyle(inspectorOpen)}
+          onClick={onToggleSidePane}
+          title={sidePaneOpen ? "收起 Side Pane" : "展开 Side Pane"}
+          style={iconSegStyle(sidePaneOpen)}
         >
-          {inspectorOpen ? "▶" : "◀"}
+          {sidePaneOpen ? "▶" : "◀"}
         </button>
       </div>
     </div>

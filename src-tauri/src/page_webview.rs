@@ -6,7 +6,7 @@ use tauri::{AppHandle, LogicalPosition, LogicalSize, Manager, WebviewUrl};
 const PAGE_WEBVIEW_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 
 /// Must match src/lib/chromeLayout.ts APP_TITLE_BAR_H.
-pub const PAGE_WEBVIEW_TITLE_BAR_H: f64 = 39.0;
+pub const PAGE_WEBVIEW_TITLE_BAR_H: f64 = 48.0;
 /// Must match src/lib/chromeLayout.ts APP_STATUS_BAR_H.
 pub const PAGE_WEBVIEW_STATUS_BAR_H: f64 = 0.0;
 
@@ -574,7 +574,7 @@ mod tests {
     fn logical_bounds_fill_window_below_chrome() {
         let (x, y, w, h) = super::page_webview_logical_bounds(1200.0, 860.0, 246.0, 1200.0);
         assert_eq!(x, 246.0);
-        assert_eq!(y, 39.0);
+        assert_eq!(y, 48.0);
         assert_eq!(w, 954.0);
         assert_eq!(h, 821.0);
     }

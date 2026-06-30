@@ -5,9 +5,7 @@ import { derivePagePanelState, deriveWorkspaceChrome } from "../lib/pagePanelSta
 import type { NavMode } from "../lib/pagePanelState";
 import PageBrowser from "./PageBrowser";
 import SessionRecordsView from "./SessionRecordsView";
-import FlowTable from "./FlowTable";
 import EmptyState from "./EmptyState";
-import InterceptPanel from "./InterceptPanel";
 
 export type PageSessionMeta = {
   sessionId: string;
@@ -28,13 +26,11 @@ type Props = {
   deleteTargetId: string | null;
   overlayOpen: boolean;
   variant: "A" | "B";
-  inspectorOpen: boolean;
   query: string;
   filter: string;
   selectedFlowId: string | null;
   recording: boolean;
   captureBusy: boolean;
-  onToggleInspector: () => void;
   onSelectFlow: (flowId: string) => void;
   onQuery: (v: string) => void;
   onFilter: (v: string) => void;
@@ -59,21 +55,6 @@ export default function SessionsWorkspace(p: Props) {
     flowCount: p.flows.length,
     loading: p.loading,
   });
-
-  const flowTableProps = {
-    flows: p.flows,
-    variant: p.variant,
-    showWaterfall: true as const,
-    query: p.query,
-    filter: p.filter,
-    selectedId: p.selectedFlowId,
-    recording: p.recording,
-    onSelect: p.onSelectFlow,
-    onQuery: p.onQuery,
-    onFilter: p.onFilter,
-    onToggleRecord: p.onToggleRecord,
-    onClear: p.onClearFlows,
-  };
 
   const isInterceptReportingEnabled = (id: string) => {
     const page = p.pages.find((pg) => pg.id === id);
@@ -113,38 +94,10 @@ export default function SessionsWorkspace(p: Props) {
                 deleteTargetId: p.deleteTargetId,
                 overlayOpen: p.overlayOpen,
               })}
-              inspectorOpen={p.inspectorOpen}
               sidebarRef={p.sidebarRef}
             />
           );
           })}
-          {p.inspectorOpen && chrome.showPageCapture && (
-            <div style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: "58%", display: "flex", flexDirection: "column", minWidth: 0, minHeight: 0, background: "var(--c-bg)" }}>
-              {chrome.showFlows ? (
-                <FlowTable {...flowTableProps} />
-              ) : (
-                <EmptyState busy={p.captureBusy} />
-              )}
-              {isInterceptReportingEnabled(p.activeId) &&
-                (p.interceptsByPage[p.activeId]?.length ?? 0) > 0 && (
-                <div style={{ borderTop: "1px solid #ededf0", maxHeight: "40%", overflow: "auto" }}>
-                  <div
-                    style={{
-                      padding: "6px 10px",
-                      fontWeight: 600,
-                      fontSize: 11,
-                      color: "var(--c-text-2)",
-                      background: "var(--c-bg-2)",
-                      borderBottom: "1px solid #ededf0",
-                    }}
-                  >
-                    Intercepted Content ({p.interceptsByPage[p.activeId].length})
-                  </div>
-                  <InterceptPanel intercepts={p.interceptsByPage[p.activeId]} />
-                </div>
-              )}
-            </div>
-          )}
         </div>
       )}
 
@@ -216,7 +169,6 @@ export default function SessionsWorkspace(p: Props) {
         </div>
       )}
 
-      {!chrome.showPageCapture && chrome.showFlows && <FlowTable {...flowTableProps} />}
     </div>
   );
 }

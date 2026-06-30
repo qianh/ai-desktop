@@ -1,5 +1,6 @@
-// Left sidebar — search, Chat, session records, Pages, Certificates, Settings.
-import { forwardRef, useState, type CSSProperties } from "react";
+// Left sidebar — search, App Chat, Records, Pages, Settings.
+import { forwardRef, useState, type CSSProperties, type ReactNode } from "react";
+import { APP_SIDEBAR_ICON_RAIL_W } from "../lib/chromeLayout";
 import type { Page } from "../types";
 import {
   DEFAULT_PAGE_DISPLAY_NAME,
@@ -241,6 +242,7 @@ type Props = {
   activeId: string;
   query: string;
   collapsed: boolean;
+  sidebarWidthPx: number;
   onToggleCollapse: () => void;
   onQuery: (v: string) => void;
   onSelect: (id: string) => void;
@@ -249,7 +251,10 @@ type Props = {
   onAddPage: () => void;
   onSettings: () => void;
   onOpenAppChat: () => void;
+  onOpenRecords: () => void;
   appChatActive: boolean;
+  recordsActive: boolean;
+  appChatSidebar?: ReactNode;
 };
 
 function partitionPages(pages: Page[]) {
@@ -274,7 +279,7 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
         data-asc-region="sidebar"
         data-depth="2"
         style={{
-          width: 40,
+          width: APP_SIDEBAR_ICON_RAIL_W,
           flex: "none",
           alignSelf: "stretch",
           height: "100%",
@@ -339,7 +344,7 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
       className="asc-glass-chrome liquid-glass"
       data-asc-region="sidebar"
       data-depth="2"
-      style={{ width: 246, flex: "none", alignSelf: "stretch", position: "relative", zIndex: 4, background: "var(--c-bg-3)", borderRight: "1px solid var(--c-border-2)", display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}
+      style={{ width: p.sidebarWidthPx, flex: "none", alignSelf: "stretch", position: "relative", zIndex: 4, background: "var(--c-bg-3)", borderRight: "1px solid var(--c-border-2)", display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}
     >
       {/* search + collapse */}
       <div style={{ padding: "10px 11px 6px", display: "flex", alignItems: "center", gap: 6 }}>
@@ -372,7 +377,18 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
           <span>App Chat</span>
         </button>
 
-        {chatPage && (
+        {p.appChatActive && p.appChatSidebar}
+
+        <button
+          onClick={p.onOpenRecords}
+          style={navSel(p.recordsActive)}
+          title="Session records"
+        >
+          <span style={{ fontSize: 14 }}>📋</span>
+          <span>Records</span>
+        </button>
+
+        {!p.appChatActive && chatPage && (
           <div
             className={listRowClass(rowSelected(chatPage.id))}
             style={{ ...listRowStyle("visible"), marginBottom: 4 }}
@@ -428,6 +444,8 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
           </div>
         )}
 
+        {!p.appChatActive && (
+          <>
         <div style={sectionHeader}>
           <span style={sectionLabel}>Pages</span>
           <button onClick={p.onAddPage} title="Add Page" style={addBtn}>
@@ -474,6 +492,8 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
             </div>
           );
         })}
+          </>
+        )}
 
       </div>
 

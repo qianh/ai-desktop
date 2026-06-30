@@ -54,3 +54,28 @@ _Avoid_: assuming every provider is a CLI command or every provider is a direct 
 
 A local collection of user-editable facts that every App Chat conversation may use as context. It is shared across App Chat threads and is separate from per-thread message history.
 _Avoid_: Conversation summary, browser cache, captured traffic.
+
+### Workspace Shell
+
+The top-level desktop layout partition: Workspace Header, App Sidebar, Content Card, and optional Side Pane. It owns resize/collapse chrome and navigation rails, not capture or upload business logic.
+_Avoid_: calling the whole app "workspace" when you mean only the sessions capture view.
+
+### App Sidebar
+
+The left navigation rail listing shell nav items (Pages, App Chat threads, Records, Settings, etc.). It supports drag resize, collapse to icon rail, and width persistence.
+_Avoid_: the old nested 220px thread list inside App Chat workspace (removed by layout-shell refactor).
+
+### Side Pane
+
+The right multi-tab auxiliary panel in the workspace shell. AppScope tabs are Flows, Intercepts, and DevTools — not ZCode's terminal/git/wiki tabs.
+_Avoid_: Inspector overlay, TitleBar tool cluster.
+
+### Content Card
+
+The rounded bordered container wrapping the main workspace area inside the shell grid.
+_Avoid_: the embedded Tauri WebView root window itself.
+
+### Chrome Contract
+
+The shared dimensional constants between `chromeLayout.ts` and `page_webview.rs` (e.g. `APP_TITLE_BAR_H = 48`) that keep native WebView bounds aligned with React chrome.
+_Avoid_: duplicating height/width magic numbers in individual components.

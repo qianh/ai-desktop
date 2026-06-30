@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import Sidebar from "./Sidebar";
 
-describe("Sidebar app feature removal", () => {
-  it("does not render Apps navigation or app add controls", () => {
+describe("Sidebar records navigation", () => {
+  it("renders Records nav item and omits TitleBar-style session records", () => {
     const html = renderToStaticMarkup(
       createElement(Sidebar, {
         pages: [],
@@ -19,7 +19,6 @@ describe("Sidebar app feature removal", () => {
         onDeletePage: () => undefined,
         onToggleInterceptReporting: () => undefined,
         onAddPage: () => undefined,
-
         onSettings: () => undefined,
         onOpenAppChat: () => undefined,
         onOpenRecords: () => undefined,
@@ -28,7 +27,7 @@ describe("Sidebar app feature removal", () => {
       }),
     );
 
-    expect(html).not.toContain("Apps");
-    expect(html).not.toContain("Add App");
+    expect(html).toContain("Records");
+    expect(html).toContain("Session records");
   });
 });

@@ -1,5 +1,5 @@
 // AppScope shell — owns all UI state and routes between views.
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { listen as tauriListen } from "@tauri-apps/api/event";
 import {
   getCertificateStatus,
@@ -25,7 +25,16 @@ import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import SessionsWorkspace from "./components/SessionsWorkspace";
 
-import AppChatWorkspace from "./components/AppChatWorkspace";
+import {
+  AppChatMainPanel,
+  AppChatShell,
+  AppChatSidebarPanel,
+} from "./components/AppChatWorkspace";
+import ContentCard from "./components/ContentCard";
+import FlowTable from "./components/FlowTable";
+import InterceptPanel from "./components/InterceptPanel";
+import ResizeHandle from "./components/ResizeHandle";
+import SidePane from "./components/SidePane";
 import Settings, { type Toggles, loadSupabaseConfig } from "./components/Settings";
 import { bindLiquidPointer } from "./hooks/useLiquidPointer";
 import {
@@ -54,6 +63,14 @@ import DeletePageModal from "./components/modals/DeletePageModal";
 import { useCertHandlers } from "./hooks/useCertHandlers";
 import { APP_TITLE_BAR_H } from "./lib/chromeLayout";
 import {
+  clampSidePaneWidth,
+  clampSidebarWidth,
+  loadShellLayoutState,
+  saveSidebarWidth,
+  saveSidePaneWidth,
+  type SidePaneTab,
+} from "./lib/shellLayout";
+import {
   BACKGROUND_CAPTURE_STOP_DELAY_MS,
   shouldStopGlobalRecordingAfterStops,
   stopPageCapture,
@@ -79,7 +96,12 @@ export default function App() {
   const [navMode, setNavMode] = useState<NavMode>("sessions");
   const [activeId, setActiveId] = useState<string>("");
   const [variant, setVariant] = useState<"A" | "B">("A");
-  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const initialShell = loadShellLayoutState();
+  const [sidebarWidthPx, setSidebarWidthPx] = useState(initialShell.sidebarWidthPx);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(initialShell.sidebarCollapsed);
+  const [sidePaneOpen, setSidePaneOpen] = useState(initialShell.sidePaneOpen);
+  const [sidePaneTab, setSidePaneTab] = useState<SidePaneTab>(initialShell.sidePaneTab);
+  const [sidePaneWidthPx, setSidePaneWidthPx] = useState(initialShell.sidePaneWidthPx);
   const [filter, setFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [recording, setRecording] = useState(true);
@@ -95,7 +117,6 @@ export default function App() {
   const captureInFlight = useRef<Set<string>>(new Set());
   const autoCaptureAttempted = useRef<Set<string>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const [interceptsByPage, setInterceptsByPage] = useState<Record<string, InterceptedFetch[]>>({});
 
@@ -243,7 +264,7 @@ export default function App() {
         : DEFAULT_PAGE_DISPLAY_NAME
       : "枢境";
 
-  const toggleInspector = useCallback(() => setInspectorOpen((v) => !v), []);
+  const toggleSidePane = useCallback(() => setSidePaneOpen((v) => !v), []);
 
   const clearFlows = () => {
     setClear((c) => ({ ...c, [activeId]: true }));
@@ -659,6 +680,27 @@ export default function App() {
     void handleStartCaptureForPage(activeId);
   }, [activeId, activeSessionMeta, captureBusy, loading, sessionsMode]);
 
+  const effectiveSidebarWidth = sidebarCollapsed
+    ? loadShellLayoutState({ sidebarCollapsed: true }).effectiveSidebarWidthPx
+    : sidebarWidthPx;
+
+  const flowTableProps = {
+    flows,
+    variant,
+    showWaterfall: true as const,
+    query,
+    filter,
+    selectedId: selectedFlowId,
+    recording,
+    onSelect: handleSelectFlow,
+    onQuery: setQuery,
+    onFilter: setFilter,
+    onToggleRecord: handleStopRecording,
+    onClear: clearFlows,
+  };
+
+  const activeIntercepts = interceptsByPage[activeId] ?? [];
+
   return (
     <div
       className="asc-app-root"
@@ -691,82 +733,150 @@ export default function App() {
           titleSuffix={titleSuffix}
           variant={variant}
           onVariant={setVariant}
-          inspectorOpen={inspectorOpen}
-          onToggleInspector={toggleInspector}
-          onOpenSessionRecords={handleOpenSessionRecords}
-          sessionRecordsActive={recordsMode}
-          onOpenDevtools={handleOpenDevtools}
-          canInspectPage={canInspectActivePage}
+          sidePaneOpen={sidePaneOpen}
+          onToggleSidePane={toggleSidePane}
         />
 
-        <div className="asc-workspace" style={{ minHeight: 0, overflow: "hidden", display: "flex", background: "var(--c-bg)" }}>
-          <Sidebar
-            ref={sidebarRef}
-            pages={enrichedPages}
-            navMode={navMode}
-            activeId={activeId}
-            query={query}
-            collapsed={sidebarCollapsed}
-            onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
-            onQuery={setQuery}
-            onSelect={selectSession}
-            onDeletePage={handleDeletePage}
-            onToggleInterceptReporting={handleToggleInterceptReporting}
-            onAddPage={() => setModal("addPage")}
-            onSettings={() => setNavMode("settings")}
-            onOpenAppChat={() => setNavMode("app-chat")}
-            appChatActive={appChatMode}
-          />
-
+        {(() => {
+          const workspaceShell = (
           <div
-            className="asc-content-panel"
-            style={{ flex: 1, minWidth: 0, position: "relative", display: "flex", flexDirection: "column", minHeight: 0, height: "100%", overflow: "hidden", background: "var(--c-bg)" }}
+            className="asc-workspace-shell"
+            style={{ minHeight: 0, overflow: "hidden", display: "flex", flex: 1, background: "var(--c-bg)" }}
           >
-            {appChatMode && <AppChatWorkspace />}
-            {navMode === "settings" && (
-              <Settings
-                toggles={toggles}
-                onToggle={toggle}
-                theme={theme}
-                onTheme={changeTheme}
-                stylePreset={stylePreset}
-                onStylePreset={changeStylePreset}
-                glassIntensity={glassIntensity}
-                onGlassIntensity={changeGlassIntensity}
-                cert={{ state: certState, ...certHandlers }}
+            <Sidebar
+              ref={sidebarRef}
+              pages={enrichedPages}
+              navMode={navMode}
+              activeId={activeId}
+              query={query}
+              collapsed={sidebarCollapsed}
+              sidebarWidthPx={effectiveSidebarWidth}
+              onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+              onQuery={setQuery}
+              onSelect={selectSession}
+              onDeletePage={handleDeletePage}
+              onToggleInterceptReporting={handleToggleInterceptReporting}
+              onAddPage={() => setModal("addPage")}
+              onSettings={() => setNavMode("settings")}
+              onOpenAppChat={() => setNavMode("app-chat")}
+              onOpenRecords={handleOpenSessionRecords}
+              appChatActive={appChatMode}
+              recordsActive={recordsMode}
+              appChatSidebar={appChatMode ? <AppChatSidebarPanel /> : undefined}
+            />
+
+            {!sidebarCollapsed && (
+              <ResizeHandle
+                ariaLabel="Resize sidebar"
+                onResizeDelta={(delta) =>
+                  setSidebarWidthPx((w) => {
+                    const next = clampSidebarWidth(w + delta);
+                    return next;
+                  })
+                }
+                onResizeEnd={() =>
+                  setSidebarWidthPx((w) => {
+                    saveSidebarWidth(w);
+                    return w;
+                  })
+                }
               />
             )}
-            {(sessionsMode || recordsMode) && (
-              <SessionsWorkspace
-                navMode={navMode}
-                activeId={activeId}
-                pages={pages}
-                sessionMetaByPage={sessionMetaByPage}
-                flowsByPage={flowsByPage}
-                flows={flows}
-                interceptsByPage={interceptsByPage}
-                loading={loading}
-                deleteTargetId={deleteTarget?.id ?? null}
-                overlayOpen={overlayOpen}
-                variant={variant}
-                inspectorOpen={inspectorOpen}
-                query={query}
-                filter={filter}
-                selectedFlowId={selectedFlowId}
-                recording={recording}
-                captureBusy={captureBusy}
-                onToggleInspector={toggleInspector}
-                onSelectFlow={handleSelectFlow}
-                onQuery={setQuery}
-                onFilter={setFilter}
-                onToggleRecord={handleStopRecording}
-                onClearFlows={clearFlows}
-                onStartCapture={handleStartCaptureForPage}
-                sidebarRef={sidebarRef}
-              />
+
+            <div
+              className="asc-content-column"
+              style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}
+            >
+              <ContentCard>
+                {appChatMode && (
+                  <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+                    <AppChatMainPanel />
+                  </div>
+                )}
+                {navMode === "settings" && (
+                  <Settings
+                    toggles={toggles}
+                    onToggle={toggle}
+                    theme={theme}
+                    onTheme={changeTheme}
+                    stylePreset={stylePreset}
+                    onStylePreset={changeStylePreset}
+                    glassIntensity={glassIntensity}
+                    onGlassIntensity={changeGlassIntensity}
+                    cert={{ state: certState, ...certHandlers }}
+                  />
+                )}
+                {(sessionsMode || recordsMode) && (
+                  <SessionsWorkspace
+                    navMode={navMode}
+                    activeId={activeId}
+                    pages={pages}
+                    sessionMetaByPage={sessionMetaByPage}
+                    flowsByPage={flowsByPage}
+                    flows={flows}
+                    interceptsByPage={interceptsByPage}
+                    loading={loading}
+                    deleteTargetId={deleteTarget?.id ?? null}
+                    overlayOpen={overlayOpen}
+                    variant={variant}
+                    query={query}
+                    filter={filter}
+                    selectedFlowId={selectedFlowId}
+                    recording={recording}
+                    captureBusy={captureBusy}
+                    onSelectFlow={handleSelectFlow}
+                    onQuery={setQuery}
+                    onFilter={setFilter}
+                    onToggleRecord={handleStopRecording}
+                    onClearFlows={clearFlows}
+                    onStartCapture={handleStartCaptureForPage}
+                    sidebarRef={sidebarRef}
+                  />
+                )}
+              </ContentCard>
+            </div>
+
+            {sidePaneOpen && sessionsMode && (
+              <>
+                <ResizeHandle
+                  ariaLabel="Resize side pane"
+                  onResizeDelta={(delta) => setSidePaneWidthPx((w) => clampSidePaneWidth(w - delta))}
+                  onResizeEnd={() =>
+                    setSidePaneWidthPx((w) => {
+                      saveSidePaneWidth(w);
+                      return w;
+                    })
+                  }
+                />
+                <SidePane
+                  widthPx={sidePaneWidthPx}
+                  tab={sidePaneTab}
+                  onTab={setSidePaneTab}
+                  flows={<FlowTable {...flowTableProps} />}
+                  intercepts={
+                    activeIntercepts.length > 0 ? (
+                      <InterceptPanel intercepts={activeIntercepts} />
+                    ) : (
+                      <div style={{ padding: 12, fontSize: 13, color: "var(--c-text-4)" }}>No intercepts yet</div>
+                    )
+                  }
+                  devtools={
+                    <div style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                      <button type="button" onClick={() => void handleOpenDevtools()} style={devtoolsBtnStyle}>
+                        {canInspectActivePage ? "检查当前页面" : "检查应用"}
+                      </button>
+                      <p style={{ fontSize: 12, color: "var(--c-text-4)", margin: 0 }}>
+                        Opens Web Inspector for the embedded page or the app shell.
+                      </p>
+                    </div>
+                  }
+                />
+              </>
             )}
           </div>
-        </div>
+          );
+          return appChatMode ? <AppChatShell>{workspaceShell}</AppChatShell> : workspaceShell;
+        })()}
       </div>
 
       {(modal != null || deleteTarget != null) && (
@@ -818,3 +928,15 @@ export default function App() {
     </div>
   );
 }
+
+const devtoolsBtnStyle: CSSProperties = {
+  appearance: "none",
+  border: "1px solid var(--c-border)",
+  background: "var(--c-bg-3)",
+  borderRadius: 8,
+  padding: "10px 14px",
+  cursor: "pointer",
+  fontSize: 13,
+  color: "var(--c-text)",
+  textAlign: "left",
+};

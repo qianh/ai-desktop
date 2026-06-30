@@ -1,5 +1,5 @@
 // Settings view (§14 of the spec). Toggle state lives in App.
-import { useState, type KeyboardEvent } from "react";
+import { useState, type CSSProperties, type KeyboardEvent } from "react";
 import AppChatSettings from "./AppChatSettings";
 import CertManager from "./CertManager";
 import type { GlassIntensity, StylePreset, StylePreviewPalette, ThemeMode } from "../lib/appearance";
@@ -266,6 +266,18 @@ type CertHandlers = {
   onRefresh: () => void | Promise<void>;
 };
 
+const SETTINGS_NAV = [
+  "General",
+  "Proxy",
+  "Capture",
+  "Data",
+  "App Chat",
+  "Certificates",
+  "Cloud Sync",
+] as const;
+
+type SettingsSection = (typeof SETTINGS_NAV)[number];
+
 export default function Settings({
   toggles,
   onToggle,
@@ -288,6 +300,7 @@ export default function Settings({
   cert: CertHandlers;
 }) {
   const [sbConfig, setSbConfig] = useState<SupabaseConfig>(loadSupabaseConfig);
+  const [activeSection, setActiveSection] = useState<SettingsSection>("General");
 
   const updateSupabase = (field: keyof SupabaseConfig, value: string) => {
     const next = { ...sbConfig, [field]: value };
@@ -331,17 +344,7 @@ export default function Settings({
 
   const isWideRow = (r: Row) => r.kind === "style-picker";
 
-  return (
-    <div style={{ flex: 1, overflow: "auto", minHeight: 0, padding: "28px 36px", background: "var(--c-bg)" }}>
-      <div style={{ maxWidth: 620, margin: "0 auto" }}>
-        <h1
-          className="asc-display-font"
-          style={{ fontSize: 21, fontWeight: 600, margin: "0 0 22px", color: "var(--c-text)" }}
-        >
-          Settings
-        </h1>
-
-        {SECTIONS.map((sec) => (
+  const renderSectionBlock = (sec: (typeof SECTIONS)[number]) => (
           <div key={sec.title} style={{ marginBottom: 26 }}>
             <div
               style={{
@@ -389,57 +392,26 @@ export default function Settings({
               ))}
             </div>
           </div>
-        ))}
+  );
 
+  const detailContent = () => {
+    if (activeSection === "General") return renderSectionBlock(SECTIONS[0]);
+    if (activeSection === "Proxy") return renderSectionBlock(SECTIONS[1]);
+    if (activeSection === "Capture") return renderSectionBlock(SECTIONS[2]);
+    if (activeSection === "Data") return renderSectionBlock(SECTIONS[3]);
+    if (activeSection === "App Chat") {
+      return (
         <div style={{ marginBottom: 26 }}>
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: "var(--c-text-4)",
-              letterSpacing: ".05em",
-              textTransform: "uppercase",
-              marginBottom: 8,
-            }}
-          >
-            App Chat
-          </div>
-          <div
-            className="asc-settings-section"
-            style={{
-              border: "1px solid var(--c-border)",
-              borderRadius: "var(--c-radius-lg, 11px)",
-              overflow: "hidden",
-              boxShadow: "var(--c-elevate, none)",
-              padding: 16,
-            }}
-          >
+          <div className="asc-settings-section" style={sectionBoxStyle}>
             <AppChatSettings />
           </div>
         </div>
-
+      );
+    }
+    if (activeSection === "Certificates") {
+      return (
         <div style={{ marginBottom: 26 }}>
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: "var(--c-text-4)",
-              letterSpacing: ".05em",
-              textTransform: "uppercase",
-              marginBottom: 8,
-            }}
-          >
-            Certificates
-          </div>
-          <div
-            className="asc-settings-section"
-            style={{
-              border: "1px solid var(--c-border)",
-              borderRadius: "var(--c-radius-lg, 11px)",
-              overflow: "hidden",
-              boxShadow: "var(--c-elevate, none)",
-            }}
-          >
+          <div className="asc-settings-section" style={sectionBoxStyle}>
             <CertManager
               embedded
               state={cert.state}
@@ -451,75 +423,114 @@ export default function Settings({
             />
           </div>
         </div>
-
-        <div style={{ marginBottom: 26 }}>
-          <div
-            style={{
-              fontSize: 11,
-              fontWeight: 700,
-              color: "var(--c-text-4)",
-              letterSpacing: ".05em",
-              textTransform: "uppercase",
-              marginBottom: 8,
-            }}
-          >
-            Cloud Sync (Supabase)
+      );
+    }
+    return (
+      <div style={{ marginBottom: 26 }}>
+        <div className="asc-settings-section" style={sectionBoxStyle}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 15px", borderBottom: "1px solid var(--c-divider)" }}>
+            <div style={{ minWidth: 80 }}>
+              <div style={{ fontSize: 13, color: "var(--c-text)" }}>URL</div>
+            </div>
+            <input
+              type="text"
+              placeholder="https://xxx.supabase.co"
+              value={sbConfig.url}
+              onChange={(e) => updateSupabase("url", e.target.value)}
+              style={inputStyle}
+            />
           </div>
-          <div
-            className="asc-settings-section"
-            style={{
-              border: "1px solid var(--c-border)",
-              borderRadius: "var(--c-radius-lg, 11px)",
-              overflow: "hidden",
-              boxShadow: "var(--c-elevate, none)",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 15px",
-                borderBottom: "1px solid var(--c-divider)",
-              }}
-            >
-              <div style={{ minWidth: 80 }}>
-                <div style={{ fontSize: 13, color: "var(--c-text)" }}>URL</div>
-              </div>
-              <input
-                type="text"
-                placeholder="https://xxx.supabase.co"
-                value={sbConfig.url}
-                onChange={(e) => updateSupabase("url", e.target.value)}
-                style={inputStyle}
-              />
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 15px", borderBottom: "1px solid var(--c-divider)" }}>
+            <div style={{ minWidth: 80 }}>
+              <div style={{ fontSize: 13, color: "var(--c-text)" }}>API Key</div>
             </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 15px",
-                borderBottom: "1px solid var(--c-divider)",
-              }}
-            >
-              <div style={{ minWidth: 80 }}>
-                <div style={{ fontSize: 13, color: "var(--c-text)" }}>API Key</div>
-              </div>
-              <input
-                type="password"
-                placeholder="eyJ..."
-                value={sbConfig.key}
-                onChange={(e) => updateSupabase("key", e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-            <div style={{ padding: "8px 15px", fontSize: 11, color: "var(--c-text-4)" }}>
-              {sbConfig.url && sbConfig.key ? "✓ 已配置 — 拦截数据将自动上传" : "未配置 — 拦截数据仅本地展示"}
-            </div>
+            <input
+              type="password"
+              placeholder="eyJ..."
+              value={sbConfig.key}
+              onChange={(e) => updateSupabase("key", e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+          <div style={{ padding: "8px 15px", fontSize: 11, color: "var(--c-text-4)" }}>
+            {sbConfig.url && sbConfig.key ? "✓ 已配置 — 拦截数据将自动上传" : "未配置 — 拦截数据仅本地展示"}
           </div>
         </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={masterDetailRootStyle}>
+      <nav style={navColStyle} aria-label="Settings sections">
+        <h1 className="asc-display-font" style={{ fontSize: 16, fontWeight: 600, margin: "0 0 12px", color: "var(--c-text)" }}>
+          Settings
+        </h1>
+        {SETTINGS_NAV.map((item) => {
+          const active = activeSection === item;
+          return (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setActiveSection(item)}
+              style={{
+                ...navItemStyle,
+                background: active ? "var(--c-accent-soft)" : "transparent",
+                color: active ? "var(--c-text)" : "var(--c-text-2)",
+              }}
+            >
+              {item}
+            </button>
+          );
+        })}
+      </nav>
+      <div style={detailColStyle}>
+        <h2 className="asc-display-font" style={{ fontSize: 18, fontWeight: 600, margin: "0 0 18px", color: "var(--c-text)" }}>
+          {activeSection}
+        </h2>
+        {detailContent()}
       </div>
     </div>
   );
 }
+
+const masterDetailRootStyle: CSSProperties = {
+  flex: 1,
+  minHeight: 0,
+  display: "grid",
+  gridTemplateColumns: "200px minmax(0, 1fr)",
+  background: "var(--c-bg)",
+  overflow: "hidden",
+};
+
+const navColStyle: CSSProperties = {
+  borderRight: "1px solid var(--c-border-2)",
+  padding: "20px 12px",
+  display: "flex",
+  flexDirection: "column",
+  gap: 4,
+  overflow: "auto",
+};
+
+const navItemStyle: CSSProperties = {
+  appearance: "none",
+  border: "none",
+  textAlign: "left",
+  padding: "8px 10px",
+  borderRadius: 8,
+  cursor: "pointer",
+  fontSize: 13,
+};
+
+const detailColStyle: CSSProperties = {
+  overflow: "auto",
+  minHeight: 0,
+  padding: "24px 28px",
+};
+
+const sectionBoxStyle: CSSProperties = {
+  border: "1px solid var(--c-border)",
+  borderRadius: "var(--c-radius-lg, 11px)",
+  overflow: "hidden",
+  boxShadow: "var(--c-elevate, none)",
+};

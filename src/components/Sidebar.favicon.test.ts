@@ -10,6 +10,7 @@ const baseProps = {
   activeId: "",
   query: "",
   collapsed: false,
+  sidebarWidthPx: 264,
   onToggleCollapse: () => undefined,
   onQuery: () => undefined,
   onSelect: () => undefined,
@@ -17,8 +18,10 @@ const baseProps = {
   onToggleInterceptReporting: () => undefined,
   onAddPage: () => undefined,
         onSettings: () => undefined,
-        onOpenAppChat: () => undefined,
-        appChatActive: false,
+  onOpenAppChat: () => undefined,
+  onOpenRecords: () => undefined,
+  appChatActive: false,
+  recordsActive: false,
 };
 
 function makePage(overrides: Partial<Page> = {}): Page {
