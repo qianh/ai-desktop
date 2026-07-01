@@ -39,58 +39,59 @@ export default function AppChatSettings() {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      {error && <div style={{ color: "var(--c-danger, #c44)", fontSize: 13 }}>{error}</div>}
-      <section>
-        <h4 style={headingStyle}>Model Providers</h4>
+    <div className="asc-app-chat-settings">
+      {error && <div className="asc-app-chat-settings__error">{error}</div>}
+      <section className="asc-app-chat-settings__section">
+        <h4 className="asc-app-chat-settings__heading">Model Providers</h4>
         {profiles.map((p) => (
-          <div key={p.id} style={cardStyle}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>{p.display_name}</div>
+          <div key={p.id} className="asc-app-chat-settings__card">
+            <div className="asc-app-chat-settings__card-title">{p.display_name}</div>
             {p.kind === "api" && (
               <>
-                <label style={labelStyle}>
-                  API Key
+                <label className="asc-app-chat-settings__field">
+                  <span className="asc-app-chat-settings__label">API Key</span>
                   <input
                     type="password"
+                    className="asc-app-chat-settings__input"
                     value={p.api_key ?? ""}
+                    placeholder="sk-…"
                     onChange={(e) => void updateProfile(p, "api_key", e.target.value)}
-                    style={inputStyle}
                   />
                 </label>
-                <label style={labelStyle}>
-                  Base URL
+                <label className="asc-app-chat-settings__field">
+                  <span className="asc-app-chat-settings__label">Base URL</span>
                   <input
+                    className="asc-app-chat-settings__input"
                     value={p.base_url ?? ""}
                     onChange={(e) => void updateProfile(p, "base_url", e.target.value)}
-                    style={inputStyle}
                   />
                 </label>
-                <label style={labelStyle}>
-                  Model
+                <label className="asc-app-chat-settings__field">
+                  <span className="asc-app-chat-settings__label">Model</span>
                   <input
+                    className="asc-app-chat-settings__input"
                     value={p.default_model ?? ""}
                     onChange={(e) => void updateProfile(p, "default_model", e.target.value)}
-                    style={inputStyle}
                   />
                 </label>
               </>
             )}
             {p.kind === "codex_cli" && (
               <>
-                <label style={labelStyle}>
-                  Codex path
+                <label className="asc-app-chat-settings__field">
+                  <span className="asc-app-chat-settings__label">Codex path</span>
                   <input
+                    className="asc-app-chat-settings__input"
                     value={p.codex_path ?? "codex"}
                     onChange={(e) => void updateProfile(p, "codex_path", e.target.value)}
-                    style={inputStyle}
                   />
                 </label>
-                <label style={labelStyle}>
-                  Model
+                <label className="asc-app-chat-settings__field">
+                  <span className="asc-app-chat-settings__label">Model</span>
                   <input
+                    className="asc-app-chat-settings__input"
                     value={p.default_model ?? ""}
                     onChange={(e) => void updateProfile(p, "default_model", e.target.value)}
-                    style={inputStyle}
                   />
                 </label>
               </>
@@ -98,26 +99,26 @@ export default function AppChatSettings() {
           </div>
         ))}
       </section>
-      <section>
-        <h4 style={headingStyle}>Global Memory</h4>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+      <section className="asc-app-chat-settings__section">
+        <h4 className="asc-app-chat-settings__heading">Global Memory</h4>
+        <div className="asc-app-chat-settings__memory-add">
           <input
+            className="asc-app-chat-settings__input"
             value={memoryDraft}
             onChange={(e) => setMemoryDraft(e.target.value)}
-            placeholder="Add a memory fact..."
-            style={{ ...inputStyle, flex: 1 }}
+            placeholder="Add a memory fact…"
           />
-          <button type="button" onClick={() => void addMemory()} style={smallBtn}>
+          <button type="button" onClick={() => void addMemory()} className="asc-app-chat-settings__btn">
             Add
           </button>
         </div>
         {memories.map((m) => (
-          <div key={m.id} style={{ ...cardStyle, display: "flex", justifyContent: "space-between", gap: 8 }}>
-            <span style={{ fontSize: 13 }}>{m.content}</span>
+          <div key={m.id} className="asc-app-chat-settings__memory-row">
+            <span className="asc-app-chat-settings__memory-text">{m.content}</span>
             <button
               type="button"
               onClick={() => void deleteChatMemoryEntry(m.id).then(refresh)}
-              style={smallBtn}
+              className="asc-app-chat-settings__btn asc-app-chat-settings__btn--ghost"
             >
               Delete
             </button>
@@ -127,45 +128,3 @@ export default function AppChatSettings() {
     </div>
   );
 }
-
-const headingStyle: React.CSSProperties = {
-  margin: "0 0 8px",
-  fontSize: 12,
-  textTransform: "uppercase",
-  letterSpacing: ".06em",
-  color: "var(--c-text-4)",
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--c-bg-3)",
-  borderRadius: 8,
-  padding: 12,
-  marginBottom: 8,
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  fontSize: 12,
-  marginBottom: 8,
-};
-
-const inputStyle: React.CSSProperties = {
-  border: "1px solid var(--c-border)",
-  borderRadius: 6,
-  padding: "6px 8px",
-  background: "var(--c-bg)",
-  color: "var(--c-text)",
-  fontSize: 13,
-};
-
-const smallBtn: React.CSSProperties = {
-  appearance: "none",
-  border: "1px solid var(--c-border)",
-  background: "var(--c-bg-3)",
-  borderRadius: 6,
-  padding: "6px 10px",
-  cursor: "pointer",
-  fontSize: 12,
-};

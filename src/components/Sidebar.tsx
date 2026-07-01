@@ -1,5 +1,5 @@
 // Left sidebar — search, App Chat, Records, Pages, Settings.
-import { forwardRef, useState, type CSSProperties, type ReactNode } from "react";
+import { forwardRef, useState, type CSSProperties } from "react";
 import { APP_SIDEBAR_ICON_RAIL_W } from "../lib/chromeLayout";
 import type { Page } from "../types";
 import {
@@ -7,6 +7,7 @@ import {
   isDefaultChatPage,
 } from "../lib/ensureDefaultPage";
 import { ACCENT, iconStyle } from "../lib/ui";
+import { AppChatSidebarPanel } from "./AppChatWorkspace";
 
 const listRowStyle = (overflow: "visible" | "hidden"): CSSProperties => ({
   display: "flex",
@@ -254,18 +255,21 @@ type Props = {
   onOpenRecords: () => void;
   appChatActive: boolean;
   recordsActive: boolean;
-  appChatSidebar?: ReactNode;
 };
 
-function partitionPages(pages: Page[]) {
+function sidebarPages(pages: Page[]): Page[] {
   const chatPage = pages.find((pg) => isDefaultChatPage(pg.host)) ?? null;
   const otherPages = pages.filter((pg) => !isDefaultChatPage(pg.host));
-  return { chatPage, otherPages };
+  return chatPage ? [chatPage, ...otherPages] : otherPages;
+}
+
+function pageDisplayName(pg: Page): string {
+  return isDefaultChatPage(pg.host) ? DEFAULT_PAGE_DISPLAY_NAME : pg.name;
 }
 
 const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
   const sessionsMode = p.navMode === "sessions";
-  const { chatPage, otherPages } = partitionPages(p.pages);
+  const pages = sidebarPages(p.pages);
   const navSel = (on: boolean): CSSProperties => (on ? { ...navBase, background: "var(--c-accent-soft)" } : navBase);
   const rowSelected = (id: string) => sessionsMode && p.activeId === id;
   const listRowClass = (selected: boolean) =>
@@ -302,28 +306,14 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
         >
           ▶
         </button>
-        {chatPage && (
-          <button
-            onClick={() => p.onSelect(chatPage.id)}
-            title={DEFAULT_PAGE_DISPLAY_NAME}
-            style={collapsedPageBtn(rowSelected(chatPage.id))}
-          >
-            <PageIcon
-              letter={chatPage.letter}
-              color={chatPage.color}
-              capturing={chatPage.status === "capturing"}
-              host={chatPage.host}
-            />
-          </button>
-        )}
-        {otherPages.map((pg) => {
+        {pages.map((pg) => {
           const sel = rowSelected(pg.id);
           const isCapturing = pg.status === "capturing";
           return (
             <button
               key={pg.id}
               onClick={() => p.onSelect(pg.id)}
-              title={pg.name}
+              title={pageDisplayName(pg)}
               style={collapsedPageBtn(sel)}
             >
               <PageIcon letter={pg.letter} color={pg.color} capturing={isCapturing} host={pg.host} />
@@ -377,8 +367,6 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
           <span>App Chat</span>
         </button>
 
-        {p.appChatActive && p.appChatSidebar}
-
         <button
           onClick={p.onOpenRecords}
           style={navSel(p.recordsActive)}
@@ -388,74 +376,26 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
           <span>Records</span>
         </button>
 
-        {!p.appChatActive && chatPage && (
-          <div
-            className={listRowClass(rowSelected(chatPage.id))}
-            style={{ ...listRowStyle("visible"), marginBottom: 4 }}
-          >
-            <button onClick={() => p.onSelect(chatPage.id)} style={itemBtn}>
-              <PageIcon
-                letter={chatPage.letter}
-                color={chatPage.color}
-                capturing={chatPage.status === "capturing"}
-                host={chatPage.host}
-              />
-              <span style={{ flex: 1, textAlign: "left", minWidth: 0, overflow: "hidden" }}>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                    color: "var(--c-text)",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {DEFAULT_PAGE_DISPLAY_NAME}
-                </span>
-                <span
-                  style={{
-                    display: "block",
-                    fontSize: 11,
-                    color: "var(--c-text-4)",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {chatPage.host}
-                </span>
-              </span>
-            </button>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                p.onDeletePage(chatPage.id);
-              }}
-              title="Delete Page"
-              aria-label={`Delete ${DEFAULT_PAGE_DISPLAY_NAME}`}
-              className="asc-sidebar-row__delete"
-              style={deleteBtn}
-            >
-              ×
-            </button>
+        {p.appChatActive && (
+          <div className="asc-sidebar-chat-threads">
+            <div style={sectionHeader}>
+              <span style={sectionLabel}>Threads</span>
+            </div>
+            <AppChatSidebarPanel />
           </div>
         )}
 
-        {!p.appChatActive && (
-          <>
         <div style={sectionHeader}>
           <span style={sectionLabel}>Pages</span>
           <button onClick={p.onAddPage} title="Add Page" style={addBtn}>
             +
           </button>
         </div>
-        {otherPages.map((pg) => {
+        {pages.map((pg) => {
           const sel = rowSelected(pg.id);
           const isCapturing = pg.status === "capturing";
-          const reportingOn = pg.interceptReportingEnabled;
+          const reportingOn = pg.interceptReportingEnabled || isDefaultChatPage(pg.host);
+          const label = pageDisplayName(pg);
           return (
             <div
               key={pg.id}
@@ -471,7 +411,7 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
                 <PageIcon letter={pg.letter} color={pg.color} capturing={isCapturing} host={pg.host} />
                 <span style={{ flex: 1, textAlign: "left", minWidth: 0, overflow: "hidden" }}>
                   <span style={{ display: "block", fontSize: 12.5, fontWeight: 500, color: "var(--c-text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {pg.name}
+                    {label}
                   </span>
                   <span style={{ display: "block", fontSize: 11, color: "var(--c-text-4)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{pg.host}</span>
                 </span>
@@ -483,7 +423,7 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
                   p.onDeletePage(pg.id);
                 }}
                 title="Delete Page"
-                aria-label={`Delete ${pg.name}`}
+                aria-label={`Delete ${label}`}
                 className="asc-sidebar-row__delete"
                 style={deleteBtn}
               >
@@ -492,8 +432,6 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
             </div>
           );
         })}
-          </>
-        )}
 
       </div>
 

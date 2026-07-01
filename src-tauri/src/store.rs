@@ -649,8 +649,18 @@ impl FlowStore {
 
     pub fn delete_chat_thread(&self, thread_id: &str) -> Result<(), String> {
         self.conn
+            .execute(
+                "DELETE FROM chat_task_audits WHERE thread_id = ?1",
+                params![thread_id],
+            )
+            .map_err(|e| e.to_string())?;
+        let deleted = self
+            .conn
             .execute("DELETE FROM chat_threads WHERE id = ?1", params![thread_id])
             .map_err(|e| e.to_string())?;
+        if deleted == 0 {
+            return Err("thread not found".into());
+        }
         Ok(())
     }
 

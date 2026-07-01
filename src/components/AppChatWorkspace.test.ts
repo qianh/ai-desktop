@@ -63,9 +63,12 @@ vi.mock("@tauri-apps/api/event", () => ({
 import AppChatWorkspace from "./AppChatWorkspace";
 
 describe("AppChatWorkspace", () => {
-  it("renders App Chat heading after load", async () => {
+  it("renders hcode-style chat shell with thread rail and composer", async () => {
     const el = createElement(AppChatWorkspace);
     const html = renderToStaticMarkup(el);
     expect(html).toContain("Loading App Chat");
+    expect(html).toContain("asc-app-chat");
+    expect(html).not.toContain("asc-app-chat-thread-rail");
+    expect(html).toContain("asc-app-chat-main");
   });
 });

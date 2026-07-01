@@ -402,7 +402,7 @@ export default function Settings({
     if (activeSection === "App Chat") {
       return (
         <div style={{ marginBottom: 26 }}>
-          <div className="asc-settings-section" style={sectionBoxStyle}>
+          <div className="asc-settings-section asc-settings-section--app-chat" style={sectionBoxStyle}>
             <AppChatSettings />
           </div>
         </div>

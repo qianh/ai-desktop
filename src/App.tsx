@@ -25,11 +25,7 @@ import TitleBar from "./components/TitleBar";
 import Sidebar from "./components/Sidebar";
 import SessionsWorkspace from "./components/SessionsWorkspace";
 
-import {
-  AppChatMainPanel,
-  AppChatShell,
-  AppChatSidebarPanel,
-} from "./components/AppChatWorkspace";
+import { AppChatShell, AppChatContent } from "./components/AppChatWorkspace";
 import ContentCard from "./components/ContentCard";
 import FlowTable from "./components/FlowTable";
 import InterceptPanel from "./components/InterceptPanel";
@@ -762,7 +758,6 @@ export default function App() {
               onOpenRecords={handleOpenSessionRecords}
               appChatActive={appChatMode}
               recordsActive={recordsMode}
-              appChatSidebar={appChatMode ? <AppChatSidebarPanel /> : undefined}
             />
 
             {!sidebarCollapsed && (
@@ -788,11 +783,7 @@ export default function App() {
               style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", minHeight: 0, height: "100%" }}
             >
               <ContentCard>
-                {appChatMode && (
-                  <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-                    <AppChatMainPanel />
-                  </div>
-                )}
+                {appChatMode && <AppChatContent />}
                 {navMode === "settings" && (
                   <Settings
                     toggles={toggles}

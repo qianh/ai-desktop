@@ -1,5 +1,6 @@
 pub mod api;
 pub mod codex;
+pub mod title;
 
 use crate::models::{ChatMemoryEntry, ChatMessage};
 

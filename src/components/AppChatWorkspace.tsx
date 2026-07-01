@@ -3,6 +3,8 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ReactNode,
@@ -21,7 +23,9 @@ import {
 import {
   applyMessageUpdated,
   applyStreamChunk,
+  applyThreadUpdated,
   mergeSendResponse,
+  resolveActiveThreadAfterDelete,
 } from "../lib/chatEvents";
 import type {
   ChatMessage,
@@ -32,6 +36,8 @@ import type {
   CodexTaskPreview,
 } from "../types/chat";
 import CodexTaskConfirmationModal from "./CodexTaskConfirmationModal";
+import DeleteChatThreadModal from "./modals/DeleteChatThreadModal";
+import ConversationMarkdown from "./ConversationMarkdown";
 
 type AppChatContextValue = {
   threads: ChatThread[];
@@ -48,7 +54,7 @@ type AppChatContextValue = {
   error: string | null;
   handleNewThread: () => Promise<void>;
   handleSend: () => Promise<void>;
-  handleDeleteThread: () => Promise<void>;
+  requestDeleteThread: (threadId: string) => void;
   codexPreview: CodexTaskPreview | null;
   handleConfirmCodex: () => Promise<void>;
   handleCancelCodex: () => Promise<void>;
@@ -74,6 +80,7 @@ export function AppChatShell({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [codexPreview, setCodexPreview] = useState<CodexTaskPreview | null>(null);
   const [pendingCodexMessageId, setPendingCodexMessageId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ChatThread | null>(null);
 
   const loadThreads = useCallback(async () => {
     const [t, p] = await Promise.all([listChatThreads(), listChatProviderProfiles()]);
@@ -113,7 +120,10 @@ export function AppChatShell({ children }: { children: ReactNode }) {
         setMessages((prev) => applyMessageUpdated(prev, event.payload));
         setSending(false);
       });
-      unsubs.push(u1, u2);
+      const u3 = await listen<ChatThread>("chat-thread-updated", (event) => {
+        setThreads((prev) => applyThreadUpdated(prev, event.payload));
+      });
+      unsubs.push(u1, u2, u3);
     })();
     return () => unsubs.forEach((fn) => fn());
   }, []);
@@ -170,10 +180,32 @@ export function AppChatShell({ children }: { children: ReactNode }) {
     setSending(false);
   };
 
-  const handleDeleteThread = async () => {
-    if (!activeThreadId) return;
-    await deleteChatThread(activeThreadId);
-    await loadThreads();
+  const requestDeleteThread = (threadId: string) => {
+    const target = threads.find((t) => t.id === threadId);
+    if (target) setDeleteTarget(target);
+  };
+
+  const confirmDeleteThread = async () => {
+    if (!deleteTarget) return;
+    const targetId = deleteTarget.id;
+    setError(null);
+    await deleteChatThread(targetId);
+    const fresh = await listChatThreads();
+    const { nextActiveId } = resolveActiveThreadAfterDelete(
+      activeThreadId,
+      targetId,
+      fresh,
+    );
+    setThreads(fresh);
+    if (activeThreadId === targetId) {
+      setActiveThreadId(nextActiveId);
+      setMessages([]);
+      setDraft("");
+      setCodexPreview(null);
+      setPendingCodexMessageId(null);
+      const next = fresh.find((t) => t.id === nextActiveId);
+      if (next) setProviderId(next.provider_profile_id);
+    }
   };
 
   const value: AppChatContextValue = {
@@ -191,13 +223,77 @@ export function AppChatShell({ children }: { children: ReactNode }) {
     error,
     handleNewThread,
     handleSend,
-    handleDeleteThread,
+    requestDeleteThread,
     codexPreview,
     handleConfirmCodex,
     handleCancelCodex,
   };
 
-  return <AppChatContext.Provider value={value}>{children}</AppChatContext.Provider>;
+  return (
+    <AppChatContext.Provider value={value}>
+      {children}
+      {deleteTarget && (
+        <div style={modalOverlayStyle}>
+          <DeleteChatThreadModal
+            threadTitle={deleteTarget.title}
+            onClose={() => setDeleteTarget(null)}
+            onConfirm={confirmDeleteThread}
+          />
+        </div>
+      )}
+    </AppChatContext.Provider>
+  );
+}
+
+function greetingForHour(hour: number): string {
+  if (hour >= 5 && hour < 9) return "早上好";
+  if (hour >= 9 && hour < 12) return "上午好";
+  if (hour >= 12 && hour < 14) return "中午好";
+  if (hour >= 14 && hour < 18) return "下午好";
+  if (hour >= 18 && hour < 23) return "晚上好";
+  return "夜深了";
+}
+
+function ChatEmptyGreeting() {
+  const [now, setNow] = useState(() => new Date());
+  const greeting = useMemo(() => greetingForHour(now.getHours()), [now]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  return (
+    <div className="asc-app-chat-empty">
+      <div className="asc-app-chat-empty__mark" aria-hidden>
+        <svg width="200" height="160" viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M398.97 0.5L147.576 319.5H1.03027L37.5996 273.081L120.167 169.603L120.171 169.598L215.342 47.5605L215.343 47.5615L252.424 0.5H398.97ZM264.544 273.271H372.527L336.082 319.498H189.886L202.642 303.307C217.584 284.34 240.398 273.271 264.544 273.271ZM209.164 0.5L202.786 8.58887C183.782 32.6885 154.782 46.752 124.091 46.752H25.9805L62.4268 0.5H209.164Z"
+            stroke="currentColor"
+          />
+        </svg>
+      </div>
+      <p className="asc-app-chat-empty__text">{greeting}</p>
+    </div>
+  );
+}
+
+function ChatBrandMark({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 3c4 0 7 2.5 7 6.5S16 16 12 16c-.8 0-1.6-.1-2.3-.3L5 19l1.5-4.2C5.2 13.4 5 12.2 5 11 5 6.5 8 3 12 3z" />
+    </svg>
+  );
 }
 
 export function AppChatSidebarPanel() {
@@ -207,41 +303,58 @@ export function AppChatSidebarPanel() {
     setActiveThreadId,
     loading,
     handleNewThread,
-    handleDeleteThread,
+    requestDeleteThread,
+    error,
   } = useAppChat();
 
   if (loading) {
-    return <div style={{ padding: 10, fontSize: 12, color: "var(--c-text-4)" }}>Loading…</div>;
+    return <div className="asc-app-chat-thread-rail__loading">Loading…</div>;
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4, padding: "4px 0 8px" }}>
-      <div style={sectionLabelStyle}>Threads</div>
-      <button type="button" onClick={() => void handleNewThread()} style={actionBtn}>
-        + New chat
+    <div className="asc-app-chat-thread-rail__inner">
+      <button type="button" className="asc-app-chat-thread-rail__new" onClick={() => void handleNewThread()}>
+        <span aria-hidden>+</span>
+        <span>New chat</span>
       </button>
-      {threads.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => setActiveThreadId(t.id)}
-          style={{
-            ...threadBtn,
-            background: t.id === activeThreadId ? "var(--c-accent-soft)" : "transparent",
-          }}
-        >
-          {t.title}
-        </button>
-      ))}
-      {activeThreadId && (
-        <button
-          type="button"
-          onClick={() => void handleDeleteThread()}
-          style={{ ...actionBtn, marginTop: 4, color: "var(--c-text-3)" }}
-        >
-          Delete thread
-        </button>
-      )}
+      {error && <div className="asc-app-chat-thread-rail__error">{error}</div>}
+      <div className="asc-app-chat-thread-rail__list">
+        {threads.map((t) => {
+          const active = t.id === activeThreadId;
+          return (
+            <div
+              key={t.id}
+              className={
+                active
+                  ? "asc-app-chat-thread-rail__row asc-app-chat-thread-rail__row--active"
+                  : "asc-app-chat-thread-rail__row"
+              }
+            >
+              <button
+                type="button"
+                onClick={() => setActiveThreadId(t.id)}
+                className="asc-app-chat-thread-rail__item"
+                title={t.title}
+              >
+                {t.title}
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  requestDeleteThread(t.id);
+                }}
+                className="asc-app-chat-thread-rail__row-delete"
+                title="Delete chat"
+                aria-label={`Delete ${t.title}`}
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -264,74 +377,118 @@ export function AppChatMainPanel() {
     handleCancelCodex,
   } = useAppChat();
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const activeProvider = providers.find((p) => p.id === providerId);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending]);
+
   if (loading) {
-    return <div style={centered}>Loading App Chat…</div>;
+    return <div className="asc-app-chat-main__loading">Loading App Chat…</div>;
   }
 
   return (
     <>
-      <header style={headerStyle}>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>App Chat</span>
-        <select
-          value={providerId}
-          onChange={(e) => setProviderId(e.target.value)}
-          style={selectStyle}
-          aria-label="Model provider"
-        >
-          {providers.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.display_name}
-            </option>
+      <div className="asc-app-chat-messages">
+        <div className="asc-app-chat-messages__inner">
+          {!activeThreadId && <ChatEmptyGreeting />}
+          {activeThreadId && messages.length === 0 && !sending && <ChatEmptyGreeting />}
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              className={
+                m.role === "user"
+                  ? "asc-app-chat-turn asc-app-chat-turn--user"
+                  : "asc-app-chat-turn asc-app-chat-turn--assistant"
+              }
+            >
+              {m.role === "assistant" && (
+                <div className="asc-app-chat-turn__avatar" aria-hidden>
+                  <ChatBrandMark />
+                </div>
+              )}
+              <div
+                className={
+                  m.role === "user"
+                    ? "asc-app-chat-bubble asc-app-chat-bubble--user"
+                    : "asc-app-chat-bubble asc-app-chat-bubble--assistant"
+                }
+              >
+                {m.role === "assistant" ? (
+                  m.content ? (
+                    <ConversationMarkdown content={m.content} />
+                  ) : m.status === "streaming" || m.status === "loading" ? (
+                    <span className="asc-app-chat-streaming">Thinking…</span>
+                  ) : null
+                ) : (
+                  <span className="asc-app-chat-bubble__plain">{m.content}</span>
+                )}
+                {m.error_message && (
+                  <div className="asc-app-chat-bubble__error">{m.error_message}</div>
+                )}
+              </div>
+            </div>
           ))}
-        </select>
-      </header>
-
-      <div style={messagesStyle}>
-        {!activeThreadId && (
-          <div style={{ color: "var(--c-text-3)", fontSize: 13 }}>Create a chat thread to get started.</div>
-        )}
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            style={{
-              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-              maxWidth: "80%",
-              padding: "10px 12px",
-              borderRadius: 10,
-              background: m.role === "user" ? "var(--c-accent-soft)" : "var(--c-bg-3)",
-              fontSize: 14,
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {m.content || (m.status === "streaming" || m.status === "loading" ? "…" : "")}
-            {m.error_message && (
-              <div style={{ color: "var(--c-danger, #c44)", fontSize: 12, marginTop: 6 }}>{m.error_message}</div>
-            )}
-          </div>
-        ))}
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
-      {error && <div style={{ padding: "0 16px", color: "var(--c-danger, #c44)", fontSize: 13 }}>{error}</div>}
+      {error && <div className="asc-app-chat-error">{error}</div>}
 
-      <footer style={footerStyle}>
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={activeThreadId ? "Message App Chat…" : "Create a thread first"}
-          disabled={!activeThreadId || sending}
-          rows={2}
-          style={textareaStyle}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void handleSend();
-            }
-          }}
-        />
-        <button type="button" onClick={() => void handleSend()} disabled={!activeThreadId || sending} style={actionBtn}>
-          Send
-        </button>
-      </footer>
+      <div className="asc-app-chat-composer-region">
+        <div className="asc-app-chat-composer-wrap">
+          <div className="asc-app-chat-composer">
+            <div className="asc-app-chat-composer__toolbar">
+              <label className="asc-app-chat-composer__model-label">
+                <span>Model</span>
+                <select
+                  value={providerId}
+                  onChange={(e) => setProviderId(e.target.value)}
+                  className="asc-app-chat-composer__model-select"
+                  aria-label="Model provider"
+                  disabled={!activeThreadId}
+                >
+                  {providers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.display_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {activeProvider && (
+                <span className="asc-app-chat-composer__model-hint">{activeProvider.default_model}</span>
+              )}
+            </div>
+            <div className="asc-app-chat-composer__body">
+              <textarea
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder={activeThreadId ? "Message…" : "Create a thread to start chatting"}
+                disabled={!activeThreadId || sending}
+                rows={3}
+                className="asc-app-chat-composer__input"
+                data-testid="chat-input"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSend();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => void handleSend()}
+                disabled={!activeThreadId || sending || !draft.trim()}
+                className="asc-app-chat-composer__send"
+                aria-label="Send message"
+              >
+                {sending ? "…" : "↑"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {codexPreview && (
         <div style={modalOverlayStyle}>
@@ -346,109 +503,25 @@ export function AppChatMainPanel() {
   );
 }
 
+/** Chat main area only — thread list lives in App Sidebar (FR-007). */
+export function AppChatContent() {
+  return (
+    <div className="asc-app-chat">
+      <main className="asc-app-chat-main">
+        <AppChatMainPanel />
+      </main>
+    </div>
+  );
+}
+
 /** Legacy default: full split layout (tests / standalone). */
 export default function AppChatWorkspace() {
   return (
     <AppChatShell>
-      <div style={{ display: "flex", height: "100%", minHeight: 0 }}>
-        <aside style={legacyAsideStyle}>
-          <AppChatSidebarPanel />
-        </aside>
-        <main style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-          <AppChatMainPanel />
-        </main>
-      </div>
+      <AppChatContent />
     </AppChatShell>
   );
 }
-
-const sectionLabelStyle: CSSProperties = {
-  fontSize: 10.5,
-  fontWeight: 700,
-  color: "var(--c-text-4)",
-  letterSpacing: ".06em",
-  textTransform: "uppercase",
-  padding: "8px 8px 2px",
-};
-
-const centered: CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  height: "100%",
-  color: "var(--c-text-3)",
-};
-
-const actionBtn: CSSProperties = {
-  appearance: "none",
-  border: "1px solid var(--c-border)",
-  background: "var(--c-bg-3)",
-  borderRadius: 8,
-  padding: "8px 12px",
-  cursor: "pointer",
-  fontSize: 13,
-  margin: "0 8px",
-};
-
-const threadBtn: CSSProperties = {
-  appearance: "none",
-  border: "none",
-  textAlign: "left",
-  padding: "8px 10px",
-  borderRadius: 8,
-  cursor: "pointer",
-  fontSize: 13,
-  color: "var(--c-text)",
-  margin: "0 8px",
-};
-
-const headerStyle: CSSProperties = {
-  padding: "10px 16px",
-  borderBottom: "1px solid var(--c-border-2)",
-  display: "flex",
-  alignItems: "center",
-  gap: 12,
-  flex: "none",
-};
-
-const messagesStyle: CSSProperties = {
-  flex: 1,
-  overflow: "auto",
-  padding: 16,
-  display: "flex",
-  flexDirection: "column",
-  gap: 12,
-  minHeight: 0,
-};
-
-const footerStyle: CSSProperties = {
-  padding: 12,
-  borderTop: "1px solid var(--c-border-2)",
-  display: "flex",
-  gap: 8,
-  flex: "none",
-};
-
-const textareaStyle: CSSProperties = {
-  flex: 1,
-  resize: "none",
-  borderRadius: 8,
-  border: "1px solid var(--c-border)",
-  padding: 10,
-  background: "var(--c-bg)",
-  color: "var(--c-text)",
-  fontSize: 14,
-};
-
-const selectStyle: CSSProperties = {
-  marginLeft: "auto",
-  borderRadius: 6,
-  border: "1px solid var(--c-border)",
-  padding: "4px 8px",
-  background: "var(--c-bg)",
-  color: "var(--c-text)",
-  fontSize: 13,
-};
 
 const modalOverlayStyle: CSSProperties = {
   position: "fixed",
@@ -458,14 +531,4 @@ const modalOverlayStyle: CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   zIndex: 10000,
-};
-
-const legacyAsideStyle: CSSProperties = {
-  width: 220,
-  borderRight: "1px solid var(--c-border-2)",
-  padding: 12,
-  display: "flex",
-  flexDirection: "column",
-  gap: 8,
-  background: "var(--c-bg-3)",
 };

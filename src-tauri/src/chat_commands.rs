@@ -1,6 +1,9 @@
 //! App Chat Tauri commands.
 
 use crate::chat_providers::api::{stream_api_completion, ChatMessageUpdated};
+use crate::chat_providers::title::{
+    fallback_thread_title, is_default_thread_title, summarize_thread_title,
+};
 use crate::chat_providers::codex::{
     preview_codex_task, run_codex_task, CodexRunResult, CodexTaskPreview, ProcessCodexRunner,
 };
@@ -137,6 +140,26 @@ fn emit_message_updated(app: &AppHandle, message: &ChatMessage) {
             error_message: message.error_message.clone(),
         },
     );
+}
+
+fn emit_thread_updated(app: &AppHandle, thread: &ChatThread) {
+    let _ = app.emit("chat-thread-updated", to_thread_dto(thread.clone()));
+}
+
+fn has_prior_user_messages(messages: &[ChatMessage]) -> bool {
+    messages.iter().any(|m| m.role == "user")
+}
+
+fn apply_auto_thread_title(
+    app: &AppHandle,
+    thread_id: &str,
+    title: &str,
+) -> Result<ChatThread, String> {
+    with_state(|state| {
+        let thread = state.store.rename_chat_thread(thread_id, title)?;
+        emit_thread_updated(app, &thread);
+        Ok(thread)
+    })
 }
 
 #[tauri::command]
@@ -300,7 +323,8 @@ pub async fn send_chat_message(
     content: String,
     provider_profile_id: Option<String>,
 ) -> Result<SendChatMessageResponse, String> {
-    let (user_message, assistant_message, profile, memories, history, workdir) = with_state(|state| {
+    let (user_message, assistant_message, profile, memories, history, workdir, auto_title) =
+        with_state(|state| {
         let thread = state
             .store
             .get_chat_thread(&thread_id)?
@@ -310,6 +334,9 @@ pub async fn send_chat_message(
             .store
             .get_chat_provider_profile(&provider_id)?
             .ok_or_else(|| "provider profile not found".to_string())?;
+        let prior_messages = state.store.list_chat_messages(&thread_id)?;
+        let auto_title =
+            !has_prior_user_messages(&prior_messages) && is_default_thread_title(&thread.title);
         let now = Utc::now();
         let user_message = ChatMessage {
             id: Uuid::new_v4().to_string(),
@@ -350,8 +377,30 @@ pub async fn send_chat_message(
             memories,
             history,
             workdir,
+            auto_title,
         ))
     })?;
+
+    if auto_title {
+        let fallback = fallback_thread_title(&content);
+        let _ = apply_auto_thread_title(&app, &thread_id, &fallback);
+
+        if profile.kind == "api" {
+            let app_title = app.clone();
+            let thread_id_title = thread_id.clone();
+            let content_title = content.clone();
+            let profile_title = profile.clone();
+            let fallback_compare = fallback.clone();
+            tokio::spawn(async move {
+                let title = summarize_thread_title(&profile_title, &content_title)
+                    .await
+                    .unwrap_or_else(|_| fallback_compare.clone());
+                if title != fallback_compare {
+                    let _ = apply_auto_thread_title(&app_title, &thread_id_title, &title);
+                }
+            });
+        }
+    }
 
     if profile.kind == "codex_cli" {
         let preview = preview_codex_task(&profile, &memories, &content, &workdir)?;

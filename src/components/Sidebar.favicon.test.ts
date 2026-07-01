@@ -60,15 +60,15 @@ describe("PageIcon favicon", () => {
     expect(html).not.toContain("/some/deep/path/favicon.ico");
   });
 
-  it("default Chat page (chatPage slot) also renders favicon img in expanded sidebar", () => {
+  it("default Chat page under Pages section renders favicon img in expanded sidebar", () => {
     const html = renderToStaticMarkup(
       createElement(Sidebar, {
         ...baseProps,
         pages: [makePage({ host: DEFAULT_PAGE_URL, name: "Chat" })],
       }),
     );
-    // chatPage is rendered in a separate slot — must still get favicon img
     expect(html).toContain("favicon.ico");
+    expect(html).toContain("Pages");
   });
 
   it("favicon img is not initially hidden with display:none (WebKit onLoad compat)", () => {

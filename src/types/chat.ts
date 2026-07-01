@@ -62,3 +62,5 @@ export interface ChatMessageUpdated {
   content: string;
   error_message: string | null;
 }
+
+export type ChatThreadUpdated = ChatThread;
