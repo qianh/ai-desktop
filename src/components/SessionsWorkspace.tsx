@@ -64,7 +64,7 @@ export default function SessionsWorkspace(p: Props) {
 
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", overflow: "hidden", background: "var(--c-bg)" }}>
-      {Object.keys(p.sessionMetaByPage).length > 0 && (
+      {p.navMode === "sessions" && Object.keys(p.sessionMetaByPage).length > 0 && (
         <div
           style={{
             position: "absolute",
@@ -102,6 +102,7 @@ export default function SessionsWorkspace(p: Props) {
       )}
 
       <div
+        className="asc-session-records"
         style={{
           position: "absolute",
           inset: 0,
@@ -109,6 +110,7 @@ export default function SessionsWorkspace(p: Props) {
           flexDirection: "column",
           zIndex: LAYER.records,
           background: "var(--c-bg)",
+          isolation: "isolate",
         }}
       >
         <SessionRecordsView pages={p.pages} />

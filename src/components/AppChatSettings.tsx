@@ -7,11 +7,13 @@ import {
   saveChatProviderProfile,
 } from "../chatApi";
 import type { ChatMemoryEntry, ChatProviderProfile } from "../types/chat";
+import { setWatermark, getWatermark, DEFAULT_WATERMARK } from "./AppChatWorkspace";
 
 export default function AppChatSettings() {
   const [profiles, setProfiles] = useState<ChatProviderProfile[]>([]);
   const [memories, setMemories] = useState<ChatMemoryEntry[]>([]);
   const [memoryDraft, setMemoryDraft] = useState("");
+  const [watermarkDraft, setWatermarkDraft] = useState(getWatermark);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = async () => {
@@ -41,6 +43,28 @@ export default function AppChatSettings() {
   return (
     <div className="asc-app-chat-settings">
       {error && <div className="asc-app-chat-settings__error">{error}</div>}
+      <section className="asc-app-chat-settings__section">
+        <h4 className="asc-app-chat-settings__heading">个性化</h4>
+        <label className="asc-app-chat-settings__field">
+          <span className="asc-app-chat-settings__label">聊天页水印文字</span>
+          <div className="asc-app-chat-settings__memory-add">
+            <input
+              className="asc-app-chat-settings__input"
+              value={watermarkDraft}
+              onChange={(e) => setWatermarkDraft(e.target.value)}
+              placeholder="WWL"
+              maxLength={6}
+            />
+            <button
+              type="button"
+              className="asc-app-chat-settings__btn"
+              onClick={() => { setWatermark(watermarkDraft.trim() || DEFAULT_WATERMARK); }}
+            >
+              保存
+            </button>
+          </div>
+        </label>
+      </section>
       <section className="asc-app-chat-settings__section">
         <h4 className="asc-app-chat-settings__heading">Model Providers</h4>
         {profiles.map((p) => (

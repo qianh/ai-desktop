@@ -16,10 +16,10 @@ describe("derivePagePanelState", () => {
     ).toBe("visible");
   });
 
-  it("returns layout-only in records mode to preserve webview host size", () => {
+  it("returns hidden in records mode so native webview does not cover the overlay", () => {
     expect(
       derivePagePanelState({ ...basePanel, navMode: "records" }),
-    ).toBe("layout-only");
+    ).toBe("hidden");
   });
 
   it("returns layout-only when modal overlay blocks capture chrome", () => {

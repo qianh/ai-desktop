@@ -10,6 +10,7 @@ export default function ContentCard({ children }: { children: ReactNode }) {
 }
 
 const cardStyle: CSSProperties = {
+  position: "relative",
   flex: 1,
   minWidth: 0,
   minHeight: 0,

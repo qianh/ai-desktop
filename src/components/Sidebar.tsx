@@ -7,7 +7,7 @@ import {
   isDefaultChatPage,
 } from "../lib/ensureDefaultPage";
 import { ACCENT, iconStyle } from "../lib/ui";
-import { AppChatSidebarPanel } from "./AppChatWorkspace";
+
 
 const listRowStyle = (overflow: "visible" | "hidden"): CSSProperties => ({
   display: "flex",
@@ -375,15 +375,6 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
           <span style={{ fontSize: 14 }}>📋</span>
           <span>Records</span>
         </button>
-
-        {p.appChatActive && (
-          <div className="asc-sidebar-chat-threads">
-            <div style={sectionHeader}>
-              <span style={sectionLabel}>Threads</span>
-            </div>
-            <AppChatSidebarPanel />
-          </div>
-        )}
 
         <div style={sectionHeader}>
           <span style={sectionLabel}>Pages</span>

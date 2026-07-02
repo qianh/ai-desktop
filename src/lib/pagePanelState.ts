@@ -27,7 +27,7 @@ export function derivePagePanelState(input: DerivePagePanelInput): PagePanelStat
   }
 
   if (navMode === "records") {
-    return "layout-only";
+    return "hidden";
   }
 
   if (navMode !== "sessions") {

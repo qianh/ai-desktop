@@ -34,7 +34,7 @@ const fieldInput: CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   height: 32,
-  border: "1px solid #d8d8dc",
+  border: "1px solid var(--c-border-3)",
   borderRadius: 8,
   padding: "0 10px",
   font: `12.5px ${FONT}`,
@@ -47,7 +47,7 @@ const timeRangeShell: CSSProperties = {
   display: "inline-flex",
   alignItems: "center",
   height: 32,
-  border: "1px solid #d8d8dc",
+  border: "1px solid var(--c-border-3)",
   borderRadius: 8,
   background: "var(--c-bg)",
   overflow: "hidden",
@@ -139,11 +139,12 @@ function SessionRecordsList({
   const hasDraftTime = draftTimeFrom.trim() !== "" || draftTimeTo.trim() !== "";
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+    <div className="asc-session-records__panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
       <div
+        className="asc-session-records__header"
         style={{
           padding: "14px 18px 16px",
-          borderBottom: "1px solid #e8e8ec",
+          borderBottom: "1px solid var(--c-border-2)",
           background: "var(--c-header-bg)",
           flex: "none",
         }}
@@ -159,7 +160,7 @@ function SessionRecordsList({
                   width: 12,
                   height: 12,
                   borderRadius: "50%",
-                  border: "2px solid #d4d4da",
+                  border: "2px solid var(--c-switch-off)",
                   borderTopColor: ACCENT,
                   animation: "ascSpin .8s linear infinite",
                   flex: "none",
@@ -176,6 +177,7 @@ function SessionRecordsList({
         </div>
 
         <div
+          className="asc-session-records__filters"
           style={{
             display: "flex",
             flexWrap: "wrap",
@@ -183,9 +185,8 @@ function SessionRecordsList({
             gap: 12,
             padding: "12px 14px",
             borderRadius: 10,
-            border: "1px solid #e4e4e8",
-            background: "var(--c-bg)",
-            boxShadow: "0 1px 2px rgba(0,0,0,.04)",
+            border: "1px solid var(--c-border)",
+            background: "var(--c-bg-2)",
           }}
         >
           <label style={{ width: 168, flex: "none" }}>
@@ -199,7 +200,7 @@ function SessionRecordsList({
                 paddingRight: 28,
                 appearance: "none",
                 backgroundImage:
-                  "linear-gradient(45deg, transparent 50%, #9a9aa0 50%), linear-gradient(135deg, #9a9aa0 50%, transparent 50%)",
+                  "linear-gradient(45deg, transparent 50%, var(--c-text-4) 50%), linear-gradient(135deg, var(--c-text-4) 50%, transparent 50%)",
                 backgroundPosition: "calc(100% - 16px) 14px, calc(100% - 11px) 14px",
                 backgroundSize: "5px 5px, 5px 5px",
                 backgroundRepeat: "no-repeat",
@@ -261,17 +262,16 @@ function SessionRecordsList({
       </div>
 
       {filterError && (
-        <div style={{ padding: "10px 16px", background: "#fff8f0", color: "#c97b20", fontSize: 12 }}>
+        <div className="asc-session-records__banner asc-session-records__banner--warn" style={{ padding: "10px 16px", fontSize: 12 }}>
           {filterError}
         </div>
       )}
 
       {error && (
         <div
+          className="asc-session-records__banner asc-session-records__banner--error"
           style={{
             padding: "10px 16px",
-            background: "#fff5f5",
-            color: "#d23b30",
             fontSize: 12,
             display: "flex",
             alignItems: "center",
@@ -286,7 +286,7 @@ function SessionRecordsList({
         </div>
       )}
 
-      <div style={{ flex: 1, overflow: "auto", minHeight: 0, background: "var(--c-bg)" }}>
+      <div className="asc-session-records__list" style={{ flex: 1, overflow: "auto", minHeight: 0, background: "var(--c-bg)" }}>
         {loading && items.length === 0 && (
           <div style={{ padding: "32px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
             {[0, 1, 2].map((i) => (
@@ -338,12 +338,13 @@ function SessionRecordsList({
             <button
               key={item.id}
               type="button"
+              className="asc-session-records__row"
               onClick={() => setSelectedRecord(item)}
               style={{
                 display: "block",
                 width: "100%",
                 border: "none",
-                borderBottom: "1px solid #f0f0f2",
+                borderBottom: "1px solid var(--c-divider)",
                 background: "transparent",
                 cursor: "pointer",
                 padding: "14px 20px",
