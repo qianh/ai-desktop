@@ -1,4 +1,6 @@
 // macOS workspace header — drag region + layout controls.
+import { useCallback } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { APP_TITLE_BAR_H } from "../lib/chromeLayout";
 import { segStyle } from "../lib/ui";
 
@@ -23,12 +25,25 @@ export default function TitleBar({
   sidePaneOpen: boolean;
   onToggleSidePane: () => void;
 }) {
+  const handleDrag = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("[data-tauri-no-drag]")) return;
+    e.preventDefault();
+    getCurrentWindow().startDragging().catch(() => {});
+  }, []);
+
+  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("[data-tauri-no-drag]")) return;
+    getCurrentWindow().toggleMaximize().catch(() => {});
+  }, []);
+
   return (
     <div
       className="asc-titlebar asc-glass-chrome liquid-glass"
       data-asc-region="titlebar"
       data-depth="1"
-      data-tauri-drag-region
+      onMouseDown={handleDrag}
+      onDoubleClick={handleDoubleClick}
       style={{
         height: APP_TITLE_BAR_H,
         flex: "none",
