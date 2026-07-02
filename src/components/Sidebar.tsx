@@ -306,6 +306,21 @@ const Sidebar = forwardRef<HTMLDivElement, Props>(function Sidebar(p, ref) {
         >
           ▶
         </button>
+        <button
+          onClick={p.onOpenAppChat}
+          title="App Chat"
+          style={collapsedPageBtn(p.appChatActive)}
+        >
+          <span style={{ fontSize: 14 }}>💬</span>
+        </button>
+        <button
+          onClick={p.onOpenRecords}
+          title="Records"
+          style={collapsedPageBtn(p.recordsActive)}
+        >
+          <span style={{ fontSize: 14 }}>📋</span>
+        </button>
+        <div style={{ width: "60%", height: 1, background: "var(--c-border-2)", margin: "2px 0" }} />
         {pages.map((pg) => {
           const sel = rowSelected(pg.id);
           const isCapturing = pg.status === "capturing";
